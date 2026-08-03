@@ -18,6 +18,7 @@ pub fn view<'a>(
     global_icmp: bool,
     enable_customization: bool,
     allow_multiple_access_to_same_host: bool,
+    enable_auto_update: bool,
 ) -> Element<'a, Message> {
     // Título
     let title = row![
@@ -59,6 +60,20 @@ pub fn view<'a>(
                     "".to_string(),
                     enable_customization,
                     Message::SettingsCustomizationToggled,
+                ).width(Length::Shrink)
+            ].align_items(Alignment::Center),
+            Space::with_height(16),
+            row![
+                column![
+                    text("Atualização automática").size(16),
+                    text("Habilita a verificação e instalação automática de atualizações em segundo plano. É recomendável deixar ativado para correções de bugs e melhorias de segurança.")
+                        .size(12)
+                        .style(theme::Text::Color(MUTED)),
+                ].width(Length::Fill),
+                toggler(
+                    "".to_string(),
+                    enable_auto_update,
+                    Message::SettingsAutoUpdateToggled,
                 ).width(Length::Shrink)
             ].align_items(Alignment::Center),
         ]
@@ -191,7 +206,7 @@ pub fn view<'a>(
                 row![
                     text("Data da Versão").size(16),
                     Space::with_width(Length::Fill),
-                    text("01/08/2026").size(16).style(theme::Text::Color(MUTED)),
+                    text("03/08/2026").size(16).style(theme::Text::Color(MUTED)),
                 ].align_items(Alignment::Center),
                 row![
                     text("Licença").size(16),

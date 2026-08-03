@@ -17,6 +17,7 @@ mod net;
 mod terminal;
 mod terminal_app;
 mod ui;
+mod update;
 
 use iced::{Application, Settings};
 use app::RusTTYApp;

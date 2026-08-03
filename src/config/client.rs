@@ -57,6 +57,9 @@ pub struct ClientConfig {
     /// Dados das personalizações criadas pelo usuário.
     #[serde(default)]
     pub customization_data: CustomizationConfig,
+    /// Habilita atualização automática do RusTTY.
+    #[serde(default = "default_true")]
+    pub enable_auto_update: bool,
 }
 
 fn default_scroll_lines() -> usize { 1 }
@@ -73,6 +76,7 @@ impl Default for ClientConfig {
             enable_customization: true,
             allow_multiple_access_to_same_host: false,
             customization_data: CustomizationConfig::default(),
+            enable_auto_update: true,
         }
     }
 }

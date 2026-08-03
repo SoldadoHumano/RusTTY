@@ -167,6 +167,8 @@ pub struct RusTTYApp {
     icmp_status: HashMap<usize, Option<bool>>,
     // Terminais ativos por host
     active_terminals: HashMap<String, std::process::Child>,
+    
+    update_notification: Option<String>,
 }
 
 // ─── View Enum ────────────────────────────────────────────────────────────────
@@ -234,6 +236,7 @@ pub enum Message {
     SettingsGlobalIcmpToggled(bool),
     SettingsCustomizationToggled(bool),
     SettingsAllowMultipleAccessToggled(bool),
+    SettingsAutoUpdateToggled(bool),
 
     // Customization
     CustomizationOpen(CustomizationViewMode),
@@ -256,6 +259,8 @@ pub enum Message {
     Tick(()),
     IcmpResult(usize, bool),
     ClearSpawnError,
+    UpdateCheckComplete(Result<bool, String>),
+    ClearUpdateStatus,
 }
 
 // ─── Design Tokens ───────────────────────────────────────────────────────────
@@ -284,25 +289,51 @@ impl Application for RusTTYApp {
         let settings_scroll_lines_input = client_config.scroll_lines.to_string();
         let settings_command_palette_key_input = client_config.command_palette_key.to_string();
 
-        (
-            Self {
-                config,
-                client_config,
-                current_view: View::Home,
-                new_host_form: NewHostForm::default(),
-                quick_connect_form: QuickConnectForm::default(),
-                customization_state: CustomizationState::default(),
-                delete_confirm: None,
-                spawn_error: None,
-                editing_host: None,
-                settings_scrollback_input,
-                settings_scroll_lines_input,
-                settings_command_palette_key_input,
-                icmp_status: HashMap::new(),
-                active_terminals: HashMap::new(),
-            },
+        let mut app = Self {
+            config,
+            client_config,
+            current_view: View::Home,
+            new_host_form: NewHostForm::default(),
+            quick_connect_form: QuickConnectForm::default(),
+            customization_state: CustomizationState::default(),
+            delete_confirm: None,
+            spawn_error: None,
+            editing_host: None,
+            settings_scrollback_input,
+            settings_scroll_lines_input,
+            settings_command_palette_key_input,
+            icmp_status: HashMap::new(),
+            active_terminals: HashMap::new(),
+            update_notification: None,
+        };
+
+        let mut initial_commands = vec![
             Command::perform(async {}, |_| Message::Tick(())),
-        )
+        ];
+
+        if app.client_config.enable_auto_update {
+            initial_commands.push(
+                Command::perform(
+                    async {
+                        tokio::task::spawn_blocking(|| {
+                            crate::update::check_and_apply_update()
+                        }).await.unwrap_or(Err("Thread pool error".into()))
+                        .map_err(|e| e.to_string())
+                    },
+                    Message::UpdateCheckComplete,
+                )
+            );
+        }
+
+        if crate::update::check_and_clear_update_flag() {
+            app.update_notification = Some("RusTTY foi atualizado com sucesso!".to_string());
+            initial_commands.push(Command::perform(
+                async { tokio::time::sleep(std::time::Duration::from_secs(8)).await },
+                |_| Message::ClearUpdateStatus,
+            ));
+        }
+
+        (app, Command::batch(initial_commands))
     }
 
     fn title(&self) -> String {
@@ -654,6 +685,10 @@ impl Application for RusTTYApp {
                 self.client_config.enable_customization = val;
                 let _ = save_client_config(&self.client_config);
             }
+            Message::SettingsAutoUpdateToggled(val) => {
+                self.client_config.enable_auto_update = val;
+                let _ = save_client_config(&self.client_config);
+            }
             Message::SettingsAllowMultipleAccessToggled(val) => {
                 self.client_config.allow_multiple_access_to_same_host = val;
                 let _ = save_client_config(&self.client_config);
@@ -782,6 +817,20 @@ impl Application for RusTTYApp {
             Message::ClearSpawnError => {
                 self.spawn_error = None;
             }
+            Message::UpdateCheckComplete(result) => {
+                match result {
+                    Ok(true) => {
+                        crate::update::mark_updated();
+                    }
+                    Ok(false) => {}
+                    Err(e) => {
+                        eprintln!("Erro ao buscar atualização: {}", e);
+                    }
+                }
+            }
+            Message::ClearUpdateStatus => {
+                self.update_notification = None;
+            }
         }
         Command::none()
     }
@@ -818,6 +867,27 @@ impl Application for RusTTYApp {
                     text(format!("  {}", err))
                         .size(14)
                         .style(theme::Text::Color(ERROR_COLOR)),
+                ]
+                .align_items(Alignment::Center)
+            )
+            .padding([12, 16])
+            .style(theme::Container::Custom(Box::new(ToastStyle)));
+
+            main_col = main_col.push(
+                container(toast)
+                    .width(Length::Fill)
+                    .align_x(iced::alignment::Horizontal::Right)
+                    .padding([10, 0, 0, 0])
+            );
+        }
+
+        if let Some(msg) = &self.update_notification {
+            let toast = container(
+                row![
+                    icon::<Message>(LucideIcon::Check),
+                    text(format!("  {}", msg))
+                        .size(14)
+                        .style(theme::Text::Color(SUCCESS_COLOR)),
                 ]
                 .align_items(Alignment::Center)
             )
@@ -1578,6 +1648,7 @@ impl RusTTYApp {
             self.client_config.global_icmp,
             self.client_config.enable_customization,
             self.client_config.allow_multiple_access_to_same_host,
+            self.client_config.enable_auto_update,
         )
     }
 
