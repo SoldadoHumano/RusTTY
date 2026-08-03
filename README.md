@@ -1,6 +1,6 @@
 <div align="center">
 <pre>
- RRRRRRR    UUU   UUU    SSSSSSSS   TTTTTTTTT   TTTTTTTTT   YYY   YYY
+RRRRRRRR    UUU   UUU    SSSSSSSS   TTTTTTTTT   TTTTTTTTT   YYY   YYY
 RRR   RRR   UUU   UUU   SSS            TTT         TTT      YYY   YYY
 RRRRRRRR    UUU   UUU    SSSSSSS       TTT         TTT       YYYYYYY 
 RRR   RRR   UUU   UUU         SSS      TTT         TTT         YYY   
