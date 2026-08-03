@@ -16,13 +16,16 @@ for /f "tokens=3 delims= " %%a in ('findstr /R "^version" Cargo.toml 2^>nul') do
 :: Monta a mensagem final automatizada
 set msg=Automated update (v%VERSION%)
 
-echo [1/3] Adicionando arquivos ao Git...
+echo [1/4] Adicionando arquivos ao Git...
 git add .
 
-echo [2/3] Criando o commit com a mensagem: "%msg%"
+echo [2/4] Criando o commit com a mensagem: "%msg%"
 git commit -m "%msg%"
 
-echo [3/3] Enviando para o GitHub (Push)...
+echo [3/4] Sincronizando repositorio (Pull)...
+git pull --rebase
+
+echo [4/4] Enviando para o GitHub (Push)...
 git push
 
 echo.
