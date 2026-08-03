@@ -37,8 +37,37 @@ pub async fn check_icmp(address: &str) -> bool {
         .await;
 
         match output {
-            Ok(Ok(cmd_out)) if cmd_out.status.success() => {
-                return true;
+            Ok(Ok(cmd_out)) => {
+                // No Windows, falhas como "Destination host unreachable" ou "TTL expired" 
+                // podem retornar código de saída 0. Precisamos validar a saída de fato.
+                let stdout = String::from_utf8_lossy(&cmd_out.stdout).to_lowercase();
+                
+                if cmd_out.status.success() {
+                    let success = stdout.lines().any(|line| {
+                        let is_reply = line.contains("reply from") 
+                            || line.contains("resposta de") 
+                            || line.contains("respuesta desde") 
+                            || line.contains("bytes from");
+                            
+                        let has_metric = line.contains("ttl=") 
+                            || line.contains("time=") || line.contains("time<") 
+                            || line.contains("tempo=") || line.contains("tempo<") 
+                            || line.contains("tiempo=") || line.contains("tiempo<");
+                            
+                        let is_error = line.contains("unreachable") 
+                            || line.contains("inacessível") 
+                            || line.contains("inaccesible") 
+                            || line.contains("expired") 
+                            || line.contains("esgotado") 
+                            || line.contains("expirado");
+                        
+                        is_reply && has_metric && !is_error
+                    });
+
+                    if success {
+                        return true;
+                    }
+                }
             }
             _ => {}
         }

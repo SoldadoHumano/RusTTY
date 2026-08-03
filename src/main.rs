@@ -11,6 +11,8 @@
 //! independentes sem exigir multi-janela no mesmo processo, contornando a
 //! limitação do Iced 0.12.
 
+#![windows_subsystem = "windows"]
+
 mod app;
 mod config;
 mod net;

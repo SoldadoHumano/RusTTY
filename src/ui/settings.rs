@@ -201,7 +201,7 @@ pub fn view<'a>(
                 row![
                     text("Versão do Cliente").size(16),
                     Space::with_width(Length::Fill),
-                    text("Beta v0.23").size(16).style(theme::Text::Color(MUTED)),
+                    text("Beta v0.24").size(16).style(theme::Text::Color(MUTED)),
                 ].align_items(Alignment::Center),
                 row![
                     text("Data da Versão").size(16),
