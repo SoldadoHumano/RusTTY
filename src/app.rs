@@ -165,6 +165,8 @@ pub struct RusTTYApp {
 
     // Status de ICMP por host (índice -> resultado)
     icmp_status: HashMap<usize, Option<bool>>,
+    // Terminais ativos por host
+    active_terminals: HashMap<String, std::process::Child>,
 }
 
 // ─── View Enum ────────────────────────────────────────────────────────────────
@@ -231,6 +233,7 @@ pub enum Message {
     SettingsPerformanceModeToggled(bool),
     SettingsGlobalIcmpToggled(bool),
     SettingsCustomizationToggled(bool),
+    SettingsAllowMultipleAccessToggled(bool),
 
     // Customization
     CustomizationOpen(CustomizationViewMode),
@@ -252,6 +255,7 @@ pub enum Message {
     // Background Tasks
     Tick(()),
     IcmpResult(usize, bool),
+    ClearSpawnError,
 }
 
 // ─── Design Tokens ───────────────────────────────────────────────────────────
@@ -295,6 +299,7 @@ impl Application for RusTTYApp {
                 settings_scroll_lines_input,
                 settings_command_palette_key_input,
                 icmp_status: HashMap::new(),
+                active_terminals: HashMap::new(),
             },
             Command::perform(async {}, |_| Message::Tick(())),
         )
@@ -506,16 +511,40 @@ impl Application for RusTTYApp {
             // ── Terminal em nova janela ─────────────────────────────────────
             Message::OpenTerminal(host_name) => {
                 self.spawn_error = None;
+                
+                if !self.client_config.allow_multiple_access_to_same_host {
+                    if let Some(child) = self.active_terminals.get_mut(&host_name) {
+                        if let Ok(None) = child.try_wait() {
+                            self.spawn_error = Some("Uma sessão para este host já está aberta.".to_string());
+                            return Command::perform(
+                                async { tokio::time::sleep(std::time::Duration::from_secs(3)).await },
+                                |_| Message::ClearSpawnError,
+                            );
+                        } else {
+                            self.active_terminals.remove(&host_name);
+                        }
+                    }
+                }
+
                 match std::env::current_exe() {
                     Ok(exe_path) => {
-                        if let Err(e) = std::process::Command::new(&exe_path)
+                        match std::process::Command::new(&exe_path)
                             .args(["--terminal", &host_name])
                             .spawn()
                         {
-                            self.spawn_error = Some(format!(
-                                "Falha ao abrir terminal: {}",
-                                e
-                            ));
+                            Ok(child) => {
+                                self.active_terminals.insert(host_name, child);
+                            }
+                            Err(e) => {
+                                self.spawn_error = Some(format!(
+                                    "Falha ao abrir terminal: {}",
+                                    e
+                                ));
+                                return Command::perform(
+                                    async { tokio::time::sleep(std::time::Duration::from_secs(3)).await },
+                                    |_| Message::ClearSpawnError,
+                                );
+                            }
                         }
                     }
                     Err(e) => {
@@ -523,6 +552,10 @@ impl Application for RusTTYApp {
                             "Não foi possível localizar o executável: {}",
                             e
                         ));
+                        return Command::perform(
+                            async { tokio::time::sleep(std::time::Duration::from_secs(3)).await },
+                            |_| Message::ClearSpawnError,
+                        );
                     }
                 }
             }
@@ -619,6 +652,10 @@ impl Application for RusTTYApp {
             }
             Message::SettingsCustomizationToggled(val) => {
                 self.client_config.enable_customization = val;
+                let _ = save_client_config(&self.client_config);
+            }
+            Message::SettingsAllowMultipleAccessToggled(val) => {
+                self.client_config.allow_multiple_access_to_same_host = val;
                 let _ = save_client_config(&self.client_config);
             }
 
@@ -742,6 +779,9 @@ impl Application for RusTTYApp {
             Message::IcmpResult(idx, res) => {
                 self.icmp_status.insert(idx, Some(res));
             }
+            Message::ClearSpawnError => {
+                self.spawn_error = None;
+            }
         }
         Command::none()
     }
@@ -765,7 +805,34 @@ impl Application for RusTTYApp {
             View::Documentation(page) => self.view_documentation(page),
         };
 
-        let main_content = container(content)
+        let mut main_col = column![
+            container(content)
+                .width(Length::Fill)
+                .height(Length::Fill)
+        ].width(Length::Fill).height(Length::Fill);
+        
+        if let Some(err) = &self.spawn_error {
+            let toast = container(
+                row![
+                    icon::<Message>(LucideIcon::AlertTriangle),
+                    text(format!("  {}", err))
+                        .size(14)
+                        .style(theme::Text::Color(ERROR_COLOR)),
+                ]
+                .align_items(Alignment::Center)
+            )
+            .padding([12, 16])
+            .style(theme::Container::Custom(Box::new(ToastStyle)));
+
+            main_col = main_col.push(
+                container(toast)
+                    .width(Length::Fill)
+                    .align_x(iced::alignment::Horizontal::Right)
+                    .padding([10, 0, 0, 0])
+            );
+        }
+
+        let main_content = container(main_col)
             .width(Length::Fill)
             .height(Length::Fill)
             .padding(20)
@@ -968,23 +1035,6 @@ impl RusTTYApp {
         ].align_items(Alignment::Center);
 
         let mut host_list = column![header_row].spacing(16);
-
-        // Exibe erro de spawn, se houver
-        if let Some(err) = &self.spawn_error {
-            host_list = host_list.push(
-                container(
-                    row![
-                        icon::<Message>(LucideIcon::AlertTriangle),
-                        text(format!("  {}", err))
-                            .size(13)
-                            .style(theme::Text::Color(ERROR_COLOR)),
-                    ]
-                    .align_items(Alignment::Center)
-                )
-                .padding([8, 12])
-                .style(theme::Container::Custom(Box::new(ErrorBoxStyle)))
-            );
-        }
 
         // A renderização do modal agora é feita em `view()` para cobrir a tela toda
 
@@ -1527,6 +1577,7 @@ impl RusTTYApp {
             self.client_config.performance_mode,
             self.client_config.global_icmp,
             self.client_config.enable_customization,
+            self.client_config.allow_multiple_access_to_same_host,
         )
     }
 
@@ -1785,6 +1836,27 @@ impl container::StyleSheet for ContextMenuStyle {
             },
             text_color: Some(TEXT_COLOR),
             ..Default::default()
+        }
+    }
+}
+
+struct ToastStyle;
+impl container::StyleSheet for ToastStyle {
+    type Style = Theme;
+    fn appearance(&self, _style: &Self::Style) -> container::Appearance {
+        container::Appearance {
+            background: Some(iced::Background::Color(Color::from_rgb(0.15, 0.15, 0.15))),
+            border: iced::Border {
+                color: Color::from_rgba(0.95, 0.3, 0.3, 0.6),
+                width: 1.0,
+                radius: 8.0.into(),
+            },
+            shadow: iced::Shadow {
+                color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
+                offset: iced::Vector::new(0.0, 4.0),
+                blur_radius: 10.0,
+            },
+            text_color: Some(TEXT_COLOR),
         }
     }
 }

@@ -17,6 +17,7 @@ pub fn view<'a>(
     performance_mode: bool,
     global_icmp: bool,
     enable_customization: bool,
+    allow_multiple_access_to_same_host: bool,
 ) -> Element<'a, Message> {
     // Título
     let title = row![
@@ -141,6 +142,20 @@ pub fn view<'a>(
                     Message::SettingsGlobalIcmpToggled,
                 ).width(Length::Shrink)
             ].align_items(Alignment::Center),
+            Space::with_height(16),
+            row![
+                column![
+                    text("Permitir acesso múltiplo ao mesmo host").size(16),
+                    text("Quando ativado, permite abrir várias sessões SSH simultâneas para o mesmo host salvo.")
+                        .size(12)
+                        .style(theme::Text::Color(MUTED)),
+                ].width(Length::Fill),
+                toggler(
+                    "".to_string(),
+                    allow_multiple_access_to_same_host,
+                    Message::SettingsAllowMultipleAccessToggled,
+                ).width(Length::Shrink)
+            ].align_items(Alignment::Center),
         ]
         .spacing(8)
     )
@@ -171,7 +186,7 @@ pub fn view<'a>(
                 row![
                     text("Versão do Cliente").size(16),
                     Space::with_width(Length::Fill),
-                    text("Beta v0.22").size(16).style(theme::Text::Color(MUTED)),
+                    text("Beta v0.23").size(16).style(theme::Text::Color(MUTED)),
                 ].align_items(Alignment::Center),
                 row![
                     text("Data da Versão").size(16),
@@ -196,7 +211,7 @@ pub fn view<'a>(
                 row![
                     text("Website").size(16),
                     Space::with_width(Length::Fill),
-                    text("byvitor.com.br").size(16).style(theme::Text::Color(MUTED)),
+                    text("byvitor.com.br/rustty").size(16).style(theme::Text::Color(MUTED)),
                 ].align_items(Alignment::Center),
             ]
             .spacing(12)

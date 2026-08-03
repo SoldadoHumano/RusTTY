@@ -51,6 +51,9 @@ pub struct ClientConfig {
     /// Habilita ou desabilita o recurso de personalização.
     #[serde(default = "default_true")]
     pub enable_customization: bool,
+    /// Permite abrir múltiplas conexões para o mesmo host.
+    #[serde(default)]
+    pub allow_multiple_access_to_same_host: bool,
     /// Dados das personalizações criadas pelo usuário.
     #[serde(default)]
     pub customization_data: CustomizationConfig,
@@ -68,6 +71,7 @@ impl Default for ClientConfig {
             scroll_lines: 1,
             command_palette_key: '.',
             enable_customization: true,
+            allow_multiple_access_to_same_host: false,
             customization_data: CustomizationConfig::default(),
         }
     }
