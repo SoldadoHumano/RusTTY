@@ -2,21 +2,55 @@ use std::fs;
 use std::path::PathBuf;
 
 pub fn check_and_apply_update() -> Result<bool, String> {
-    let status = self_update::backends::github::Update::configure()
+    let updater = self_update::backends::github::Update::configure()
         .repo_owner("SoldadoHumano")
         .repo_name("RusTTY")
         .bin_name("rustty.exe")
-        // Como o asset upado manualmente se chama apenas "rustty.exe",
-        // forçamos o target a buscar exatamente esse nome, ignorando arquitetura padrão.
         .target("rustty.exe")
-        .show_download_progress(false)
         .current_version(self_update::cargo_crate_version!())
         .build()
-        .map_err(|e| e.to_string())?
-        .update()
         .map_err(|e| e.to_string())?;
+
+    let latest_release = updater.get_latest_release().map_err(|e| e.to_string())?;
+    let is_greater = self_update::version::bump_is_greater(
+        updater.current_version().as_str(),
+        &latest_release.version,
+    )
+    .map_err(|e| e.to_string())?;
+
+    if !is_greater {
+        return Ok(false);
+    }
+
+    let asset = latest_release.asset_for("rustty.exe", None)
+        .ok_or_else(|| "Asset 'rustty.exe' não encontrado na nova release.".to_string())?;
     
-    Ok(status.updated())
+    let temp_dir = std::env::temp_dir();
+    let temp_exe = temp_dir.join(format!("rustty_update_{}.exe", uuid::Uuid::new_v4()));
+
+    let mut response = reqwest::blocking::Client::builder()
+        .user_agent("RusTTY-Updater")
+        .build()
+        .map_err(|e| e.to_string())?
+        .get(&asset.download_url)
+        .header(reqwest::header::ACCEPT, "application/octet-stream")
+        .send()
+        .map_err(|e| e.to_string())?;
+
+    if !response.status().is_success() {
+        return Err(format!("Falha no download da nova versão: {}", response.status()));
+    }
+
+    let mut file = fs::File::create(&temp_exe).map_err(|e| e.to_string())?;
+    std::io::copy(&mut response, &mut file).map_err(|e| e.to_string())?;
+    drop(file);
+
+    self_replace::self_replace(&temp_exe).map_err(|e| e.to_string())?;
+    let _ = fs::remove_file(&temp_exe);
+
+    mark_updated();
+    
+    Ok(true)
 }
 
 pub fn get_update_flag_path() -> PathBuf {
