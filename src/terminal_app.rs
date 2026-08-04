@@ -433,7 +433,12 @@ impl Application for TerminalApp {
                 let canvas_h  = height as f32;
                 let new_cols  = ((width as f32) / CELL_W).floor() as usize;
                 let new_rows  = (canvas_h / CELL_H).floor() as usize;
-                let (new_cols, new_rows) = (new_cols.max(1), new_rows.max(1));
+                
+                // Ignorar redimensionamentos muito pequenos (ex: ao minimizar a janela)
+                // Isso evita que a grade seja esmagada para 1x1 e o histórico truncado ou todo jogado para scrollback.
+                if new_cols < 10 || new_rows < 5 {
+                    return Command::none();
+                }
 
                 if new_cols != self.terminal.grid.cols || new_rows != self.terminal.grid.rows {
                     self.terminal.resize(new_rows, new_cols);
