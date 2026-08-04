@@ -1920,37 +1920,62 @@ impl RusTTYApp {
                 crate::config::AuthType::None => icon::<Message>(LucideIcon::Shield),
             };
 
-            let bridge_info = column![
-                text(&bridge.name).size(16).style(theme::Text::Color(TEXT_COLOR)),
+            let bridge_btn = button(
                 row![
+                    icon::<Message>(LucideIcon::Network),
+                    text(format!("  {}  ", bridge.name)).size(15),
                     auth_icon,
-                    text(format!("  {}@{}", bridge.username, bridge.address)).size(13).style(theme::Text::Color(MUTED_COLOR)),
+                    text(format!("  {}@{}:{}", bridge.username, bridge.address, bridge.port))
+                        .size(12)
+                        .style(theme::Text::Color(MUTED_COLOR)),
                 ]
                 .align_items(Alignment::Center)
-            ]
-            .spacing(4);
+            )
+            .on_press(Message::ConnectToBridge(idx))
+            .width(Length::Fill)
+            .padding(12)
+            .style(theme::Button::Text);
 
-            let action_row = row![
-                button(icon::<Message>(LucideIcon::Terminal))
-                    .on_press(Message::ConnectToBridge(idx))
-                    .style(theme::Button::Text)
-                    .padding(8),
-                button(icon::<Message>(LucideIcon::Edit))
-                    .on_press(Message::EditBridge(idx))
-                    .style(theme::Button::Text)
-                    .padding(8),
-                button(icon::<Message>(LucideIcon::Trash2))
-                    .on_press(Message::RequestDeleteBridge(idx))
-                    .style(theme::Button::Text)
-                    .padding(8),
-            ]
-            .align_items(Alignment::Center)
-            .spacing(4);
+            let bridge_with_menu = iced_aw::ContextMenu::new(
+                bridge_btn,
+                move || {
+                    container(
+                        column![
+                            button(
+                                row![
+                                    icon::<Message>(LucideIcon::Edit),
+                                    text("  Editar ponte").size(14),
+                                    Space::with_width(Length::Fill),
+                                ]
+                                .align_items(Alignment::Center)
+                            )
+                            .on_press(Message::EditBridge(idx))
+                            .style(theme::Button::Text)
+                            .padding([8, 12])
+                            .width(Length::Fill),
+                            button(
+                                row![
+                                    icon::<Message>(LucideIcon::Trash2),
+                                    text("  Remover ponte").size(14),
+                                    Space::with_width(Length::Fill),
+                                ]
+                                .align_items(Alignment::Center)
+                            )
+                            .on_press(Message::RequestDeleteBridge(idx))
+                            .style(theme::Button::Destructive)
+                            .padding([8, 12])
+                            .width(Length::Fill),
+                        ]
+                        .spacing(2)
+                    )
+                    .width(Length::Fixed(165.0))
+                    .style(theme::Container::Custom(Box::new(ContextMenuStyle)))
+                    .into()
+                }
+            );
 
             let bridge_row = row![
-                bridge_info,
-                Space::with_width(Length::Fill),
-                action_row,
+                bridge_with_menu,
             ]
             .align_items(Alignment::Center)
             .spacing(4);
@@ -1958,7 +1983,6 @@ impl RusTTYApp {
             bridge_list = bridge_list.push(
                 container(bridge_row)
                     .style(theme::Container::Custom(Box::new(HostItemStyle)))
-                    .padding(12)
             );
         }
 
@@ -2166,11 +2190,16 @@ impl RusTTYApp {
         .spacing(16)
         .max_width(600);
 
-        container(form_content)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x()
-            .into()
+        container(
+            iced::widget::scrollable(form_content)
+                .direction(iced::widget::scrollable::Direction::Vertical(
+                    iced::widget::scrollable::Properties::new().width(0).scroller_width(0)
+                ))
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x()
+        .into()
     }
 
     /// View de formulário para Conexão Rápida.
