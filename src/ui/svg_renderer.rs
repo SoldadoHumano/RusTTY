@@ -90,8 +90,23 @@ fn generate_svg_image(icon: LucideIcon, target_size: u16, rgba: [u8; 4]) -> imag
     let transform = Transform::from_scale(scale_x, scale_y);
     resvg_tree.render(transform, &mut pixmap.as_mut());
     
-    // 4. Retorna a imagem. O Pixmap já contém dados no formato RGBA.
+    // 4. Retorna a imagem em memória codificada como PNG.
+    // O Iced tem bugs no atlas de textura (0.12) quando usa Handle::from_pixels e a janela redimensiona.
+    // Codificar para PNG e usar from_memory evita que a textura seja perdida permanentemente ao maximizar.
     let rgba_data = pixmap.take(); // Retorna Vec<u8>
     
-    image::Handle::from_pixels(w, h, rgba_data)
+    let mut buffer = std::io::Cursor::new(Vec::new());
+    if ::image::write_buffer_with_format(
+        &mut buffer,
+        &rgba_data,
+        w,
+        h,
+        ::image::ColorType::Rgba8,
+        ::image::ImageFormat::Png,
+    ).is_ok() {
+        image::Handle::from_memory(buffer.into_inner())
+    } else {
+        // Fallback
+        image::Handle::from_pixels(w, h, rgba_data)
+    }
 }

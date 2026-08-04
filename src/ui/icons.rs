@@ -131,7 +131,6 @@ pub fn icon_colored<'a, Message: 'a>(icon: LucideIcon, color: iced::Color) -> El
         return iced::widget::svg(icon.as_handle())
             .width(Length::Fixed(size as f32))
             .height(Length::Fixed(size as f32))
-            .content_fit(iced::ContentFit::Fill)
             .style(iced::theme::Svg::custom_fn(style_fn))
             .into();
     }
@@ -141,7 +140,6 @@ pub fn icon_colored<'a, Message: 'a>(icon: LucideIcon, color: iced::Color) -> El
     iced::widget::image(handle)
         .width(Length::Fixed(size as f32))
         .height(Length::Fixed(size as f32))
-        .content_fit(iced::ContentFit::Fill)
         .into()
 }
 
@@ -150,7 +148,6 @@ pub fn icon_sized<'a, Message: 'a>(icon: LucideIcon, size: u16) -> Element<'a, M
         return iced::widget::svg(icon.as_handle())
             .width(Length::Fixed(size as f32))
             .height(Length::Fixed(size as f32))
-            .content_fit(iced::ContentFit::Fill)
             .style(iced::theme::Svg::custom_fn(|theme| {
                 iced::widget::svg::Appearance {
                     color: Some(theme.palette().text),
@@ -164,7 +161,6 @@ pub fn icon_sized<'a, Message: 'a>(icon: LucideIcon, size: u16) -> Element<'a, M
     iced::widget::image(handle)
         .width(Length::Fixed(size as f32))
         .height(Length::Fixed(size as f32))
-        .content_fit(iced::ContentFit::Fill)
         .into()
 }
 
