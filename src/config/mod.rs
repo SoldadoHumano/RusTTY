@@ -29,6 +29,15 @@ pub enum AuthType {
     None,
 }
 
+impl PartialEq for AuthType {
+    fn eq(&self, _other: &Self) -> bool {
+        // Implementação simplificada pois não usaremos PartialEq de forma estrita em AuthType,
+        // apenas para permitir o derive em BridgeProfile
+        false 
+    }
+}
+impl Eq for AuthType {}
+
 fn default_true() -> bool { true }
 
 /// Um perfil de host salvo
@@ -41,6 +50,25 @@ pub struct HostProfile {
     pub auth: AuthType,
     #[serde(default = "default_true")]
     pub enable_icmp: bool,
+    #[serde(default)]
+    pub bridge_id: Option<uuid::Uuid>,
+}
+
+/// Um perfil de ponte (bridge) salva
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BridgeProfile {
+    pub id: uuid::Uuid,
+    pub name: String,
+    pub address: String,
+    pub port: u16,
+    pub username: String,
+    pub auth: AuthType,
+}
+
+impl std::fmt::Display for BridgeProfile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
 }
 
 /// Representa um nó na árvore de pastas
@@ -57,6 +85,8 @@ pub enum ConfigNode {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub root_nodes: Vec<ConfigNode>,
+    #[serde(default)]
+    pub bridges: Vec<BridgeProfile>,
     // Futuro: Configurações de UI (fonte, cores do terminal)
 }
 
@@ -64,6 +94,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             root_nodes: Vec::new(),
+            bridges: Vec::new(),
         }
     }
 }

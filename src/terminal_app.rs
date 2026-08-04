@@ -137,6 +137,7 @@ pub enum TerminalInit {
         user: String,
         pass: String,
     },
+    Bridge(String),
 }
 
 impl Default for TerminalInit {
@@ -170,6 +171,24 @@ impl Application for TerminalApp {
                 });
                 (name, h)
             },
+            TerminalInit::Bridge(id_str) => {
+                if let Ok(id) = uuid::Uuid::parse_str(&id_str) {
+                    let h = config.bridges.iter().find(|b| b.id == id).map(|b| {
+                        crate::config::HostProfile {
+                            name: b.name.clone(),
+                            address: b.address.clone(),
+                            port: b.port,
+                            username: b.username.clone(),
+                            auth: b.auth.clone(),
+                            enable_icmp: false,
+                            bridge_id: None, // Para não fazer loop infinito
+                        }
+                    });
+                    ("Ponte".to_string(), h)
+                } else {
+                    ("Ponte".to_string(), None)
+                }
+            },
             TerminalInit::QuickSsh { address, port, user, pass } => {
                 let auth = if pass == "none" {
                     AuthType::None
@@ -186,6 +205,7 @@ impl Application for TerminalApp {
                     username: user,
                     auth,
                     enable_icmp: false,
+                    bridge_id: None,
                 };
                 (address, Some(h))
             }
@@ -260,6 +280,27 @@ impl Application for TerminalApp {
             AuthType::None => SshAuth::Password(secrecy::SecretString::new(String::new())),
         };
 
+        let bridge_info = if let Some(bridge_id) = host.bridge_id {
+            config.bridges.iter().find(|b| b.id == bridge_id).map(|bridge| {
+                let bridge_auth = match &bridge.auth {
+                    AuthType::Password(p) => {
+                        match p.unprotect() {
+                            Ok(secret) => SshAuth::Password(secret),
+                            Err(_) => SshAuth::Password(secrecy::SecretString::new(String::new())),
+                        }
+                    },
+                    AuthType::Key { path, passphrase } => SshAuth::PrivateKey {
+                        path: path.clone(),
+                        passphrase: passphrase.as_ref().and_then(|p| p.unprotect().ok()),
+                    },
+                    AuthType::None => SshAuth::Password(secrecy::SecretString::new(String::new())),
+                };
+                Box::new((bridge.address.clone(), bridge.port, bridge.username.clone(), bridge_auth))
+            })
+        } else {
+            None
+        };
+
         let host_name = host_name_display;
 
         // ── 4. Calcula tamanho inicial do PTY a partir do tamanho da janela ───
@@ -289,6 +330,7 @@ impl Application for TerminalApp {
                     host_addr, host_port, host_user,
                     ssh_auth, pty_cols, pty_rows,
                     event_tx, cmd_rx,
+                    bridge_info,
                 ));
             },
             |_| TerminalMessage::Noop,
@@ -1120,6 +1162,7 @@ fn apply_ip_highlight(
 pub fn run_terminal(init: TerminalInit) -> iced::Result {
     let title = match &init {
         TerminalInit::SavedHost(name) => name.clone(),
+        TerminalInit::Bridge(id) => format!("Bridge: {}", id),
         TerminalInit::QuickSsh { address, .. } => address.clone(),
     };
     

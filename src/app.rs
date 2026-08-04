@@ -51,6 +51,10 @@ pub struct NewHostForm {
     pub enable_icmp: bool,
     /// Mensagem de erro de validação atual
     pub error: Option<String>,
+    /// Habilita ponte
+    pub enable_bridge: bool,
+    /// ID da ponte selecionada
+    pub selected_bridge: Option<uuid::Uuid>,
 }
 
 impl NewHostForm {
@@ -58,6 +62,30 @@ impl NewHostForm {
         Self {
             port: "22".to_string(),
             enable_icmp: true,
+            enable_bridge: false,
+            selected_bridge: None,
+            ..Default::default()
+        }
+    }
+}
+
+/// Estado transitório do formulário de criação de Ponte SSH.
+#[derive(Debug, Clone, Default)]
+pub struct NewBridgeForm {
+    pub name: String,
+    pub address: String,
+    pub port: String,
+    pub username: String,
+    pub password: String,
+    pub allow_domain: bool,
+    pub show_password: bool,
+    pub error: Option<String>,
+}
+
+impl NewBridgeForm {
+    fn new() -> Self {
+        Self {
+            port: "22".to_string(),
             ..Default::default()
         }
     }
@@ -146,17 +174,23 @@ pub struct RusTTYApp {
     current_view: View,
     /// Estado do formulário — habitado apenas quando `current_view == View::NewHost`
     new_host_form: NewHostForm,
+    /// Estado do formulário de pontes
+    new_bridge_form: NewBridgeForm,
     /// Estado do formulário de conexão rápida
     quick_connect_form: QuickConnectForm,
     /// Estado da aba de personalização
     customization_state: CustomizationState,
-    /// Índice do host aguardando confirmação de deleção permanente.
+    /// Índice do host ou ponte aguardando confirmação de deleção permanente.
     /// `None` quando nenhuma deleção está pendente.
     delete_confirm: Option<usize>,
+    /// Confirmação de deleção de bridge
+    bridge_delete_confirm: Option<usize>,
     /// Erro ao tentar abrir terminal (ex: exe não encontrado)
     spawn_error: Option<String>,
     /// Índice do host sendo editado atualmente.
     editing_host: Option<usize>,
+    /// Índice da ponte sendo editada atualmente.
+    editing_bridge: Option<usize>,
     
     // Estado da tela de Configurações
     settings_scrollback_input: String,
@@ -179,6 +213,8 @@ pub struct RusTTYApp {
 pub enum View {
     Home,
     NewHost,
+    Bridges,
+    NewBridge,
     QuickConnect,
     Settings,
     Customization,
@@ -199,9 +235,22 @@ pub enum Message {
     FormPasswordChanged(String),
     FormToggleDomain(bool),
     FormToggleIcmp(bool),
+    FormToggleBridge(bool),
+    FormSelectedBridgeChanged(uuid::Uuid),
     FormTogglePassword,
     FormSave,
     FormCancel,
+
+    // Formulário de nova ponte
+    BridgeFormNameChanged(String),
+    BridgeFormAddressChanged(String),
+    BridgeFormPortChanged(String),
+    BridgeFormUsernameChanged(String),
+    BridgeFormPasswordChanged(String),
+    BridgeFormToggleDomain(bool),
+    BridgeFormTogglePassword,
+    BridgeFormSave,
+    BridgeFormCancel,
 
     // Formulário de conexão rápida
     QcProtocolSelected(QuickConnectProtocol),
@@ -218,15 +267,26 @@ pub enum Message {
     /// Spawna `rustty --terminal <host_name>` em novo processo.
     OpenTerminal(String),
 
-    // Deleção e Edição de hosts
+    // Deleção e Edição de hosts/bridges
     /// Solicita confirmação de deleção para o host no índice `usize`.
     RequestDeleteHost(usize),
     /// Confirma a deleção permanente do host.
     ConfirmDeleteHost,
-    /// Cancela a intenção de deleção.
+    /// Cancela a intenção de deleção de host.
     CancelDeleteHost,
     /// Edita o host no índice `usize`.
     EditHost(usize),
+
+    /// Solicita confirmação de deleção para a ponte no índice `usize`.
+    RequestDeleteBridge(usize),
+    /// Confirma a deleção permanente da ponte.
+    ConfirmDeleteBridge,
+    /// Cancela a intenção de deleção da ponte.
+    CancelDeleteBridge,
+    /// Edita a ponte no índice `usize`.
+    EditBridge(usize),
+    /// Conecta à ponte (terminal SSH nela mesma).
+    ConnectToBridge(usize),
 
     // Configurações Locais
     SettingsMaxScrollbackChanged(String),
@@ -294,11 +354,14 @@ impl Application for RusTTYApp {
             client_config,
             current_view: View::Home,
             new_host_form: NewHostForm::default(),
+            new_bridge_form: NewBridgeForm::default(),
             quick_connect_form: QuickConnectForm::default(),
             customization_state: CustomizationState::default(),
             delete_confirm: None,
+            bridge_delete_confirm: None,
             spawn_error: None,
             editing_host: None,
+            editing_bridge: None,
             settings_scrollback_input,
             settings_scroll_lines_input,
             settings_command_palette_key_input,
@@ -358,11 +421,15 @@ impl Application for RusTTYApp {
             Message::SwitchView(view) => {
                 if view == View::NewHost {
                     self.new_host_form = NewHostForm::new();
+                } else if view == View::NewBridge {
+                    self.new_bridge_form = NewBridgeForm::new();
                 }
                 // Fechar modal de confirmação ao trocar de view
                 self.delete_confirm = None;
+                self.bridge_delete_confirm = None;
                 self.spawn_error = None;
                 self.editing_host = None;
+                self.editing_bridge = None;
                 self.current_view = view;
             }
 
@@ -384,6 +451,18 @@ impl Application for RusTTYApp {
             Message::FormToggleIcmp(v) => {
                 self.new_host_form.enable_icmp = v;
                 self.new_host_form.error = None;
+            }
+            Message::FormToggleBridge(v) => {
+                self.new_host_form.enable_bridge = v;
+                if v && self.new_host_form.selected_bridge.is_none() {
+                    // Seleciona a primeira ponte se houver
+                    if let Some(first) = self.config.bridges.first() {
+                        self.new_host_form.selected_bridge = Some(first.id);
+                    }
+                }
+            }
+            Message::FormSelectedBridgeChanged(id) => {
+                self.new_host_form.selected_bridge = Some(id);
             }
             Message::FormTogglePassword => {
                 self.new_host_form.show_password = !self.new_host_form.show_password;
@@ -431,7 +510,8 @@ impl Application for RusTTYApp {
                                 .unwrap_or_else(|_| crate::config::ProtectedMemory::new("").unwrap())
                         )
                     },
-                    enable_icmp: form.enable_icmp,
+                    enable_icmp: if form.enable_bridge { false } else { form.enable_icmp },
+                    bridge_id: if form.enable_bridge { form.selected_bridge } else { None },
                 };
 
                 if let Some(idx) = self.editing_host {
@@ -457,6 +537,96 @@ impl Application for RusTTYApp {
                 self.new_host_form = NewHostForm::new();
                 self.editing_host = None;
                 self.current_view = View::Home;
+            }
+
+            // ── Salvar ponte ────────────────────────────────────────────────
+            Message::BridgeFormNameChanged(v)    => { self.new_bridge_form.name = v; self.new_bridge_form.error = None; }
+            Message::BridgeFormAddressChanged(v) => { self.new_bridge_form.address = v; self.new_bridge_form.error = None; }
+            Message::BridgeFormPortChanged(v) => {
+                if v.chars().all(|c| c.is_ascii_digit()) && v.len() <= 5 {
+                    self.new_bridge_form.port = v;
+                }
+                self.new_bridge_form.error = None;
+            }
+            Message::BridgeFormUsernameChanged(v) => { self.new_bridge_form.username = v; self.new_bridge_form.error = None; }
+            Message::BridgeFormPasswordChanged(v) => { self.new_bridge_form.password = v; self.new_bridge_form.error = None; }
+            Message::BridgeFormToggleDomain(v) => {
+                self.new_bridge_form.allow_domain = v;
+                self.new_bridge_form.error = None;
+            }
+            Message::BridgeFormTogglePassword => {
+                self.new_bridge_form.show_password = !self.new_bridge_form.show_password;
+            }
+            Message::BridgeFormSave => {
+                let form = &mut self.new_bridge_form;
+
+                if form.name.trim().is_empty() {
+                    form.error = Some("O nome/apelido da ponte é obrigatório.".to_string());
+                    return Command::none();
+                }
+                if form.address.trim().is_empty() {
+                    form.error = Some("O endereço é obrigatório.".to_string());
+                    return Command::none();
+                }
+                if let Err(e) = validate_address(&form.address, form.allow_domain) {
+                    form.error = Some(e);
+                    return Command::none();
+                }
+                if form.username.trim().is_empty() {
+                    form.error = Some("O nome de usuário é obrigatório.".to_string());
+                    return Command::none();
+                }
+
+                let port: u16 = match form.port.parse() {
+                    Ok(p) if p > 0 => p,
+                    _ => {
+                        form.error = Some("Porta inválida (1–65535).".to_string());
+                        return Command::none();
+                    }
+                };
+
+                let profile = crate::config::BridgeProfile {
+                    id: if let Some(idx) = self.editing_bridge {
+                        self.config.bridges[idx].id
+                    } else {
+                        uuid::Uuid::new_v4()
+                    },
+                    name: form.name.trim().to_string(),
+                    address: form.address.trim().to_string(),
+                    port,
+                    username: form.username.trim().to_string(),
+                    auth: if form.password.is_empty() {
+                        AuthType::None
+                    } else {
+                        AuthType::Password(
+                            crate::config::ProtectedMemory::new(&form.password)
+                                .unwrap_or_else(|_| crate::config::ProtectedMemory::new("").unwrap())
+                        )
+                    },
+                };
+
+                if let Some(idx) = self.editing_bridge {
+                    self.config.bridges[idx] = profile;
+                    self.editing_bridge = None;
+                } else {
+                    self.config.bridges.push(profile);
+                }
+
+                match save_config(&self.config) {
+                    Ok(()) => {
+                        self.current_view = View::Bridges;
+                        self.new_bridge_form = NewBridgeForm::new();
+                        return Command::perform(async {}, |_| Message::Tick(()));
+                    }
+                    Err(e) => {
+                        self.new_bridge_form.error = Some(format!("Erro ao salvar ponte: {}", e));
+                    }
+                }
+            }
+            Message::BridgeFormCancel => {
+                self.new_bridge_form = NewBridgeForm::new();
+                self.editing_bridge = None;
+                self.current_view = View::Bridges;
             }
 
             // ── Conexão Rápida ──────────────────────────────────────────────
@@ -626,9 +796,112 @@ impl Application for RusTTYApp {
                     }
                     form.allow_domain = host.address.parse::<std::net::IpAddr>().is_err();
                     form.enable_icmp = host.enable_icmp;
+                    if let Some(bid) = host.bridge_id {
+                        form.enable_bridge = true;
+                        form.selected_bridge = Some(bid);
+                    }
                     self.new_host_form = form;
                     self.editing_host = Some(idx);
                     self.current_view = View::NewHost;
+                }
+            }
+
+            // ── Deleção e Edição de pontes ──────────────────────────────────
+            Message::RequestDeleteBridge(idx) => {
+                self.bridge_delete_confirm = Some(idx);
+            }
+
+            Message::CancelDeleteBridge => {
+                self.bridge_delete_confirm = None;
+            }
+
+            Message::ConfirmDeleteBridge => {
+                if let Some(idx) = self.bridge_delete_confirm.take() {
+                    if idx < self.config.bridges.len() {
+                        let deleted_id = self.config.bridges[idx].id;
+                        self.config.bridges.remove(idx);
+                        
+                        // Remover a referência nos hosts que a usavam
+                        for node in &mut self.config.root_nodes {
+                            if let ConfigNode::Host(ref mut host) = node {
+                                if host.bridge_id == Some(deleted_id) {
+                                    host.bridge_id = None;
+                                    host.enable_icmp = true; // Volta ao normal
+                                }
+                            }
+                        }
+
+                        if let Err(e) = save_config(&self.config) {
+                            self.spawn_error = Some(format!("Erro ao salvar após deleção de ponte: {}", e));
+                        }
+                    }
+                }
+                self.bridge_delete_confirm = None;
+            }
+
+            Message::EditBridge(idx) => {
+                if let Some(bridge) = self.config.bridges.get(idx) {
+                    let mut form = NewBridgeForm::new();
+                    form.name = bridge.name.clone();
+                    form.address = bridge.address.clone();
+                    form.port = bridge.port.to_string();
+                    form.username = bridge.username.clone();
+                    if let AuthType::Password(p) = &bridge.auth {
+                        use secrecy::ExposeSecret;
+                        form.password = p.unprotect().map(|s| s.expose_secret().to_string()).unwrap_or_default();
+                    }
+                    form.allow_domain = bridge.address.parse::<std::net::IpAddr>().is_err();
+                    self.new_bridge_form = form;
+                    self.editing_bridge = Some(idx);
+                    self.current_view = View::NewBridge;
+                }
+            }
+            
+            Message::ConnectToBridge(idx) => {
+                if let Some(bridge) = self.config.bridges.get(idx) {
+                    self.spawn_error = None;
+                    let bridge_name = bridge.name.clone();
+                    
+                    if !self.client_config.allow_multiple_access_to_same_host {
+                        if let Some(child) = self.active_terminals.get_mut(&bridge_name) {
+                            if let Ok(None) = child.try_wait() {
+                                self.spawn_error = Some("Uma sessão para esta ponte já está aberta.".to_string());
+                                return Command::perform(
+                                    async { tokio::time::sleep(std::time::Duration::from_secs(3)).await },
+                                    |_| Message::ClearSpawnError,
+                                );
+                            } else {
+                                self.active_terminals.remove(&bridge_name);
+                            }
+                        }
+                    }
+
+                    match std::env::current_exe() {
+                        Ok(exe_path) => {
+                            match std::process::Command::new(&exe_path)
+                                .args(["--bridge-terminal", &bridge.id.to_string()])
+                                .spawn()
+                            {
+                                Ok(child) => {
+                                    self.active_terminals.insert(bridge_name, child);
+                                }
+                                Err(e) => {
+                                    self.spawn_error = Some(format!("Falha ao abrir terminal: {}", e));
+                                    return Command::perform(
+                                        async { tokio::time::sleep(std::time::Duration::from_secs(3)).await },
+                                        |_| Message::ClearSpawnError,
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            self.spawn_error = Some(format!("Não foi possível localizar o executável: {}", e));
+                            return Command::perform(
+                                async { tokio::time::sleep(std::time::Duration::from_secs(3)).await },
+                                |_| Message::ClearSpawnError,
+                            );
+                        }
+                    }
                 }
             }
 
@@ -844,6 +1117,8 @@ impl Application for RusTTYApp {
         let content: Element<Message> = match &self.current_view {
             View::Home => self.view_home(),
             View::NewHost => self.view_new_host(),
+            View::Bridges => self.view_bridges(),
+            View::NewBridge => self.view_new_bridge(),
             View::QuickConnect => self.view_quick_connect(),
             View::Settings => self.view_settings(),
             View::Customization => crate::ui::customization::view(
@@ -979,6 +1254,89 @@ impl Application for RusTTYApp {
                 .backdrop(Message::CancelDeleteHost)
                 .on_esc(Message::CancelDeleteHost)
                 .into()
+        } else if let Some(idx) = self.bridge_delete_confirm {
+            let bridge = self.config.bridges.get(idx);
+            let bridge_name = bridge.map(|b| b.name.as_str()).unwrap_or("esta ponte");
+            let bridge_id = bridge.map(|b| b.id).unwrap_or_default();
+            
+            let affected_hosts = self.config.root_nodes.iter().filter(|n| {
+                if let ConfigNode::Host(h) = n {
+                    h.bridge_id == Some(bridge_id)
+                } else {
+                    false
+                }
+            }).count();
+
+            let modal_box = container(
+                column![
+                    row![
+                        icon_sized::<Message>(LucideIcon::AlertTriangle, 24),
+                        text(format!("  Deletar \"{}\"?", bridge_name))
+                            .size(18)
+                            .style(theme::Text::Color(ERROR_COLOR)),
+                        Space::with_width(Length::Fill),
+                        button(icon::<Message>(LucideIcon::X))
+                            .on_press(Message::CancelDeleteBridge)
+                            .style(theme::Button::Text)
+                    ]
+                    .align_items(Alignment::Center),
+                    Space::with_height(Length::Fixed(16.0)),
+                    text("Esta ação é permanente e irreversível.")
+                        .size(14)
+                        .style(theme::Text::Color(MUTED_COLOR)),
+                    if affected_hosts > 0 {
+                        column![
+                            Space::with_height(Length::Fixed(12.0)),
+                            text(format!("{} host(s) utilizam esta ponte. Eles voltarão a conectar diretamente (sem ponte).", affected_hosts))
+                                .size(14)
+                                .style(theme::Text::Color(ERROR_COLOR)),
+                        ]
+                    } else {
+                        column![]
+                    },
+                    Space::with_height(Length::Fixed(24.0)),
+                    row![
+                        Space::with_width(Length::Fill),
+                        button(
+                            row![
+                                text("Cancelar").size(14),
+                            ]
+                            .align_items(Alignment::Center)
+                        )
+                        .on_press(Message::CancelDeleteBridge)
+                        .style(theme::Button::Text)
+                        .padding([8, 16]),
+                        Space::with_width(Length::Fixed(12.0)),
+                        button(
+                            row![
+                                icon::<Message>(LucideIcon::Trash2),
+                                text(if affected_hosts > 0 { "  Apagar mesmo assim" } else { "  Deletar permanentemente" }).size(14),
+                            ]
+                            .align_items(Alignment::Center)
+                        )
+                        .on_press(Message::ConfirmDeleteBridge)
+                        .style(theme::Button::Destructive)
+                        .padding([8, 16]),
+                    ]
+                    .align_items(Alignment::Center),
+                ]
+                .padding(24)
+            )
+            .width(Length::Fixed(480.0))
+            .style(theme::Container::Custom(Box::new(DeleteConfirmStyle)));
+
+            let modal_content = container(modal_box)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x()
+                .center_y();
+
+            let modal_element: Element<Message> = modal_content.into();
+
+            Modal::new(base_ui, Some(modal_element))
+                .backdrop(Message::CancelDeleteBridge)
+                .on_esc(Message::CancelDeleteBridge)
+                .into()
         } else {
             base_ui
         }
@@ -1003,6 +1361,17 @@ impl RusTTYApp {
                 .align_items(Alignment::Center)
             )
             .on_press(Message::SwitchView(View::Home))
+            .style(theme::Button::Text)
+            .width(Length::Fill),
+
+            button(
+                row![
+                    icon::<Message>(LucideIcon::Network),
+                    text("  Pontes").size(15),
+                ]
+                .align_items(Alignment::Center)
+            )
+            .on_press(Message::SwitchView(View::Bridges))
             .style(theme::Button::Text)
             .width(Length::Fill),
 
@@ -1385,6 +1754,46 @@ impl RusTTYApp {
             .into()
         };
 
+        // ── Campo: Ponte (Bridge) ─────────────────────────────────────────────
+        let bridge_checkbox = iced::widget::checkbox::<Message, Theme, iced::Renderer>(
+            "Habilitar ponte (Jump Host)",
+            form.enable_bridge,
+        )
+        .on_toggle(Message::FormToggleBridge)
+        .size(16)
+        .text_size(13);
+
+        let bridge_section: Element<'_, Message> = if form.enable_bridge {
+            if self.config.bridges.is_empty() {
+                column![
+                    bridge_checkbox,
+                    text("Nenhuma ponte cadastrada. Vá em 'Pontes' para cadastrar.")
+                        .size(13)
+                        .style(theme::Text::Color(ERROR_COLOR)),
+                ].spacing(6).into()
+            } else {
+                let options: Vec<crate::config::BridgeProfile> = self.config.bridges.clone();
+                let selected = options.iter().find(|b| Some(b.id) == form.selected_bridge).cloned();
+                
+                let pick_list = iced::widget::pick_list(
+                    options,
+                    selected,
+                    |b: crate::config::BridgeProfile| Message::FormSelectedBridgeChanged(b.id)
+                )
+                .padding(8);
+                
+                column![
+                    bridge_checkbox,
+                    row![
+                        text("Selecionar ponte: ").size(13).style(theme::Text::Color(MUTED_COLOR)),
+                        pick_list
+                    ].align_items(Alignment::Center).spacing(8)
+                ].spacing(6).into()
+            }
+        } else {
+            column![bridge_checkbox].into()
+        };
+
         // ── Aviso de segurança ────────────────────────────────────────────────
         let security_note = row![
             icon_sized::<Message>(LucideIcon::Shield, 13),
@@ -1452,6 +1861,8 @@ impl RusTTYApp {
                 user_input,
                 Space::with_height(Length::Fixed(16.0)),
                 password_input,
+                Space::with_height(Length::Fixed(16.0)),
+                bridge_section,
                 Space::with_height(Length::Fixed(24.0)),
                 error_widget,
                 Space::with_height(Length::Fixed(8.0)),
@@ -1463,6 +1874,303 @@ impl RusTTYApp {
             .max_width(600),
         )
         .into()
+    }
+
+    /// View principal: lista de pontes + botão para nova.
+    fn view_bridges(&self) -> Element<'_, Message> {
+        let header = row![
+            icon_sized::<Message>(LucideIcon::Network, 22),
+            text("  Suas Pontes (Jump Hosts)")
+                .size(26)
+                .style(theme::Text::Color(PRIMARY_ORANGE)),
+        ]
+        .align_items(Alignment::Center);
+
+        let add_btn = button(
+            row![
+                icon::<Message>(LucideIcon::ServerPlus),
+                text("  Nova Ponte").size(14),
+            ]
+            .align_items(Alignment::Center)
+        )
+        .on_press(Message::SwitchView(View::NewBridge))
+        .style(theme::Button::Custom(Box::new(OrangeButtonStyle)))
+        .padding([8, 14]);
+
+        let header_row = row![
+            header,
+            Space::with_width(Length::Fill),
+            add_btn
+        ].align_items(Alignment::Center);
+
+        let mut bridge_list = column![header_row].spacing(16);
+
+        if self.config.bridges.is_empty() {
+            bridge_list = bridge_list.push(
+                text("Nenhuma ponte cadastrada. Clique em \"Nova Ponte\" para adicionar.")
+                    .size(14)
+                    .style(theme::Text::Color(MUTED_COLOR)),
+            );
+        }
+
+        for (idx, bridge) in self.config.bridges.iter().enumerate() {
+            let auth_icon = match &bridge.auth {
+                crate::config::AuthType::Key { .. } => icon::<Message>(LucideIcon::Key),
+                crate::config::AuthType::Password(_) => icon::<Message>(LucideIcon::Lock),
+                crate::config::AuthType::None => icon::<Message>(LucideIcon::Shield),
+            };
+
+            let bridge_info = column![
+                text(&bridge.name).size(16).style(theme::Text::Color(TEXT_COLOR)),
+                row![
+                    auth_icon,
+                    text(format!("  {}@{}", bridge.username, bridge.address)).size(13).style(theme::Text::Color(MUTED_COLOR)),
+                ]
+                .align_items(Alignment::Center)
+            ]
+            .spacing(4);
+
+            let action_row = row![
+                button(icon::<Message>(LucideIcon::Terminal))
+                    .on_press(Message::ConnectToBridge(idx))
+                    .style(theme::Button::Text)
+                    .padding(8),
+                button(icon::<Message>(LucideIcon::Edit))
+                    .on_press(Message::EditBridge(idx))
+                    .style(theme::Button::Text)
+                    .padding(8),
+                button(icon::<Message>(LucideIcon::Trash2))
+                    .on_press(Message::RequestDeleteBridge(idx))
+                    .style(theme::Button::Text)
+                    .padding(8),
+            ]
+            .align_items(Alignment::Center)
+            .spacing(4);
+
+            let bridge_row = row![
+                bridge_info,
+                Space::with_width(Length::Fill),
+                action_row,
+            ]
+            .align_items(Alignment::Center)
+            .spacing(4);
+
+            bridge_list = bridge_list.push(
+                container(bridge_row)
+                    .style(theme::Container::Custom(Box::new(HostItemStyle)))
+                    .padding(12)
+            );
+        }
+
+        scrollable(bridge_list.padding(4)).into()
+    }
+
+    /// View de formulário para criar nova ponte SSH.
+    fn view_new_bridge(&self) -> Element<'_, Message> {
+        let form = &self.new_bridge_form;
+
+        let header = row![
+            button(
+                row![
+                    icon::<Message>(LucideIcon::Undo2),
+                    text("  Voltar").size(14),
+                ]
+                .align_items(Alignment::Center)
+            )
+            .on_press(Message::BridgeFormCancel)
+            .style(theme::Button::Text),
+
+            Space::with_width(Length::Fixed(16.0)),
+
+            icon_sized::<Message>(LucideIcon::Network, 22),
+            text(if self.editing_bridge.is_some() {
+                "  Editar Ponte SSH"
+            } else {
+                "  Nova Ponte"
+            })
+                .size(24)
+                .style(theme::Text::Color(PRIMARY_ORANGE)),
+        ]
+        .align_items(Alignment::Center)
+        .spacing(4);
+
+        let name_input = column![
+            row![
+                icon::<Message>(LucideIcon::Monitor),
+                text("  Apelido / Nome").size(13).style(theme::Text::Color(MUTED_COLOR)),
+            ]
+            .align_items(Alignment::Center),
+            text_input("Ex: Ponte Primária", &form.name)
+                .on_input(Message::BridgeFormNameChanged)
+                .padding(10)
+                .size(15)
+                .id(text_input::Id::new("bridge_name")),
+        ]
+        .spacing(6);
+
+        let addr_hint = if form.allow_domain {
+            "Ex: ponte.empresa.com ou 10.0.0.1"
+        } else {
+            "Ex: 10.0.0.1 (somente IP numérico)"
+        };
+
+        let domain_checkbox = iced::widget::checkbox::<Message, Theme, iced::Renderer>(
+            "Permitir domínio",
+            form.allow_domain,
+        )
+        .on_toggle(Message::BridgeFormToggleDomain)
+        .size(16)
+        .text_size(13);
+
+        let address_input = column![
+            row![
+                icon::<Message>(LucideIcon::Network),
+                text("  Endereço da Ponte").size(13).style(theme::Text::Color(MUTED_COLOR)),
+            ]
+            .align_items(Alignment::Center),
+            text_input(addr_hint, &form.address)
+                .on_input(Message::BridgeFormAddressChanged)
+                .padding(10)
+                .size(15)
+                .id(text_input::Id::new("bridge_address")),
+            domain_checkbox,
+        ]
+        .spacing(6);
+
+        let port_input = column![
+            row![
+                icon::<Message>(LucideIcon::Plug),
+                text("  Porta SSH").size(13).style(theme::Text::Color(MUTED_COLOR)),
+            ]
+            .align_items(Alignment::Center),
+            text_input("22", &form.port)
+                .on_input(Message::BridgeFormPortChanged)
+                .padding(10)
+                .size(15)
+                .width(Length::Fixed(100.0))
+                .id(text_input::Id::new("bridge_port")),
+        ]
+        .spacing(6);
+
+        let user_input = column![
+            row![
+                icon::<Message>(LucideIcon::User),
+                text("  Usuário SSH").size(13).style(theme::Text::Color(MUTED_COLOR)),
+            ]
+            .align_items(Alignment::Center),
+            text_input("Ex: root, admin", &form.username)
+                .on_input(Message::BridgeFormUsernameChanged)
+                .padding(10)
+                .size(15)
+                .id(text_input::Id::new("bridge_user")),
+        ]
+        .spacing(6);
+
+        let eye_icon = if form.show_password {
+            icon::<Message>(LucideIcon::EyeOff)
+        } else {
+            icon::<Message>(LucideIcon::Eye)
+        };
+
+        let pass_field = text_input("Senha SSH (opcional)", &form.password)
+            .on_input(Message::BridgeFormPasswordChanged)
+            .secure(!form.show_password)
+            .padding(10)
+            .size(15)
+            .id(text_input::Id::new("bridge_pass"));
+
+        let password_input_col = column![
+            row![
+                icon::<Message>(LucideIcon::Lock),
+                text("  Senha").size(13).style(theme::Text::Color(MUTED_COLOR)),
+            ]
+            .align_items(Alignment::Center),
+            row![
+                pass_field,
+                Space::with_width(Length::Fixed(8.0)),
+                button(eye_icon)
+                    .on_press(Message::BridgeFormTogglePassword)
+                    .style(theme::Button::Text)
+                    .padding(8),
+            ]
+            .align_items(Alignment::Center),
+            text("Deixe em branco para usar autenticação por chave.")
+                .size(11)
+                .style(theme::Text::Color(MUTED_COLOR)),
+        ]
+        .spacing(6);
+        
+        let password_input: Element<Message> = if self.editing_bridge.is_none() {
+            password_input_col.into()
+        } else {
+            column![
+                row![
+                    icon::<Message>(LucideIcon::Lock),
+                    text("  Senha oculta por segurança").size(13).style(theme::Text::Color(MUTED_COLOR)),
+                ]
+                .align_items(Alignment::Center),
+                text("Para alterar a senha, remova esta ponte e crie uma nova.")
+                    .size(11)
+                    .style(theme::Text::Color(MUTED_COLOR)),
+            ]
+            .spacing(6)
+            .into()
+        };
+
+        let error_widget: Element<Message> = if let Some(err) = &form.error {
+            container(
+                row![
+                    icon::<Message>(LucideIcon::X),
+                    text(format!("  {}", err))
+                        .size(13)
+                        .style(theme::Text::Color(ERROR_COLOR)),
+                ]
+                .align_items(Alignment::Center)
+            )
+            .padding([8, 12])
+            .style(theme::Container::Custom(Box::new(ErrorBoxStyle)))
+            .into()
+        } else {
+            iced::widget::Container::new(iced::widget::Space::with_width(Length::Fixed(0.0))).into()
+        };
+
+        let save_btn = button(
+            row![
+                icon::<Message>(LucideIcon::Save),
+                text("  Salvar Ponte").size(15),
+            ]
+            .align_items(Alignment::Center)
+        )
+        .on_press(Message::BridgeFormSave)
+        .style(theme::Button::Custom(Box::new(OrangeButtonStyle)))
+        .padding([10, 20]);
+
+        let action_row = row![
+            Space::with_width(Length::Fill),
+            save_btn,
+        ];
+
+        let form_content = column![
+            header,
+            Space::with_height(Length::Fixed(10.0)),
+            name_input,
+            address_input,
+            port_input,
+            user_input,
+            password_input,
+            Space::with_height(Length::Fixed(20.0)),
+            error_widget,
+            Space::with_height(Length::Fixed(10.0)),
+            action_row,
+        ]
+        .spacing(16)
+        .max_width(600);
+
+        container(form_content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x()
+            .into()
     }
 
     /// View de formulário para Conexão Rápida.

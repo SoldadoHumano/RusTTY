@@ -69,18 +69,37 @@ pub enum SshAuth {
 
 // ─── Sessão Principal ────────────────────────────────────────────────────────
 
+async fn authenticate_session(
+    session: &mut russh::client::Handle<SshClientHandler>,
+    user: &str,
+    auth: &SshAuth,
+) -> Result<bool, String> {
+    match auth {
+        SshAuth::Password(password) => {
+            match session.authenticate_password(user, password.expose_secret()).await {
+                Ok(true) => Ok(true),
+                Ok(false) => Err("Autenticação SSH falhou: credenciais inválidas.".into()),
+                Err(e) => Err(format!("Erro de autenticação: {}", e)),
+            }
+        }
+        SshAuth::PrivateKey { path, passphrase } => {
+            let pass_str = passphrase.as_ref().map(|p| p.expose_secret().to_string());
+            let key_pair = match load_private_key(path, pass_str.as_deref()) {
+                Ok(k) => k,
+                Err(e) => return Err(format!("Falha ao carregar chave privada '{}': {}", path, e)),
+            };
+
+            let key_arc = Arc::new(key_pair);
+            match session.authenticate_publickey(user, key_arc).await {
+                Ok(true) => Ok(true),
+                Ok(false) => Err("Autenticação por chave falhou.".into()),
+                Err(e) => Err(format!("Erro de autenticação por chave: {}", e)),
+            }
+        }
+    }
+}
+
 /// Inicia e gerencia uma sessão SSH completa numa task Tokio assíncrona.
-///
-/// # Fluxo
-/// 1. Conecta ao servidor via TCP
-/// 2. Autentica (senha ou chave)
-/// 3. Abre canal e requisita PTY + shell interativa
-/// 4. Loop bidirecional: lê stdout do servidor e envia input da UI
-///
-/// # Invariantes
-/// - Nunca faz `unwrap()` em paths de produção
-/// - Toda falha é reportada via `NetworkEvent::Error`
-/// - Desconexão limpa via `NetworkEvent::Disconnected`
 pub async fn start_ssh_session(
     host: String,
     port: u16,
@@ -90,94 +109,58 @@ pub async fn start_ssh_session(
     pty_rows: u16,
     ui_sender: mpsc::Sender<NetworkEvent>,
     mut command_receiver: mpsc::Receiver<NetworkCommand>,
+    bridge_info: Option<Box<(String, u16, String, SshAuth)>>,
 ) {
     let config = Arc::new(Config::default());
-    let handler = SshClientHandler;
     let addr = format!("{}:{}", host, port);
 
-    // ── 1. Conectar ──────────────────────────────────────────────────────────
-    let mut session = match russh::client::connect(config, &addr, handler).await {
-        Ok(s) => s,
-        Err(e) => {
-            let _ = ui_sender
-                .send(NetworkEvent::Error(format!(
-                    "Falha ao conectar em {}: {}",
-                    addr, e
-                )))
-                .await;
+    let mut session = if let Some(bridge) = bridge_info {
+        let (bridge_host, bridge_port, bridge_user, bridge_auth) = *bridge;
+        let bridge_addr = format!("{}:{}", bridge_host, bridge_port);
+        let _ = ui_sender.send(NetworkEvent::Disconnected(format!("Conectando via ponte: {}...", bridge_host))).await;
+
+        let mut bridge_session = match russh::client::connect(config.clone(), &bridge_addr, SshClientHandler).await {
+            Ok(s) => s,
+            Err(e) => {
+                let _ = ui_sender.send(NetworkEvent::Error(format!("Falha ao conectar na ponte {}: {}", bridge_addr, e))).await;
+                return;
+            }
+        };
+
+        if let Err(e) = authenticate_session(&mut bridge_session, &bridge_user, &bridge_auth).await {
+            let _ = ui_sender.send(NetworkEvent::Error(format!("Autenticação na ponte falhou: {}", e))).await;
             return;
         }
-    };
 
-    // ── 2. Autenticar ────────────────────────────────────────────────────────
-    let auth_ok = match auth {
-        SshAuth::Password(password) => {
-            let result = match session.authenticate_password(user.clone(), password.expose_secret().to_string()).await {
-                Ok(true) => true,
-                Ok(false) => {
-                    let _ = ui_sender
-                        .send(NetworkEvent::Error(
-                            "Autenticação SSH falhou: credenciais inválidas.".into(),
-                        ))
-                        .await;
-                    return;
-                }
-                Err(e) => {
-                    let _ = ui_sender
-                        .send(NetworkEvent::Error(format!("Erro de autenticação: {}", e)))
-                        .await;
-                    return;
-                }
-            };
-            result
+        let mut channel = match bridge_session.channel_open_direct_tcpip(host.clone(), port as u32, "localhost", 0).await {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = ui_sender.send(NetworkEvent::Error(format!("Ponte falhou ao rotear para {}: {}", addr, e))).await;
+                return;
+            }
+        };
+
+        let stream = channel.into_stream();
+        match russh::client::connect_stream(config.clone(), stream, SshClientHandler).await {
+            Ok(s) => s,
+            Err(e) => {
+                let _ = ui_sender.send(NetworkEvent::Error(format!("Falha ao conectar via ponte em {}: {}", addr, e))).await;
+                return;
+            }
         }
-
-        SshAuth::PrivateKey { path, passphrase } => {
-            let pass_str = passphrase.as_ref().map(|p| p.expose_secret().to_string());
-            let key_pair = match load_private_key(&path, pass_str.as_deref()) {
-                Ok(k) => k,
-                Err(e) => {
-                    let _ = ui_sender
-                        .send(NetworkEvent::Error(format!(
-                            "Falha ao carregar chave privada '{}': {}",
-                            path, e
-                        )))
-                        .await;
-                    return;
-                }
-            };
-
-            let key_arc = Arc::new(key_pair);
-            match session.authenticate_publickey(user.clone(), key_arc).await {
-                Ok(true) => true,
-                Ok(false) => {
-                    let _ = ui_sender
-                        .send(NetworkEvent::Error(
-                            "Autenticação por chave recusada pelo servidor.".into(),
-                        ))
-                        .await;
-                    return;
-                }
-                Err(e) => {
-                    let _ = ui_sender
-                        .send(NetworkEvent::Error(format!(
-                            "Erro de autenticação por chave: {}",
-                            e
-                        )))
-                        .await;
-                    return;
-                }
+    } else {
+        match russh::client::connect(config.clone(), &addr, SshClientHandler).await {
+            Ok(s) => s,
+            Err(e) => {
+                let _ = ui_sender.send(NetworkEvent::Error(format!("Falha ao conectar em {}: {}", addr, e))).await;
+                return;
             }
         }
     };
 
-    let _ = auth_ok;
-
-    if !auth_ok {
-        // Nunca deve chegar aqui, mas garante o contrato
-        let _ = ui_sender
-            .send(NetworkEvent::Error("Autenticação SSH falhou.".into()))
-            .await;
+    // ── 2. Autenticar no host final ───────────────────────────────────────────
+    if let Err(e) = authenticate_session(&mut session, &user, &auth).await {
+        let _ = ui_sender.send(NetworkEvent::Error(e)).await;
         return;
     }
 

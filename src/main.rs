@@ -49,6 +49,12 @@ fn main() -> iced::Result {
         });
     }
 
+    // Detecta modo bridge: `rustty --bridge-terminal <id>`
+    if let Some(pos) = args.iter().position(|a| a == "--bridge-terminal") {
+        let id_str = args.get(pos + 1).cloned().unwrap_or_default();
+        return run_terminal(terminal_app::TerminalInit::Bridge(id_str));
+    }
+
     // Modo padrão: gerenciador de conexões
     RusTTYApp::run(Settings {
         // Registra a fonte Lucide para que o renderer possa exibir os ícones.
