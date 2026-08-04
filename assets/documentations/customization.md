@@ -1,27 +1,54 @@
-# Personalização Visual
+# Personalização Visual do Terminal
 
-O terminal clássico é notoriamente conhecido por ser monótono (o clássico fundo preto com letras brancas ou verdes). Porém, administradores de rede e programadores leem milhares de linhas de texto todos os dias. Uma cor bem colocada pode reduzir drasticamente o tempo que você leva para achar um erro ou um endereço importante.
+O RusTTY tem um sistema de destaque de texto que permite colorir padrões específicos em tempo real conforme a saída do terminal chega. As regras são aplicadas localmente na camada de renderização — o conteúdo transmitido pelo servidor não é afetado.
 
-Por isso, o RusTTY possui o motor de personalização **Customization**, acessível pelo ícone de Pincel/Paleta no menu lateral.
+O painel de personalização é acessado pelo ícone de paleta no menu lateral.
 
-## Destaque de Palavras Específicas (Keywords)
-Imagine ler 5.000 linhas de um arquivo de diagnóstico tentando achar o exato momento em que algo falhou. Com as Keywords, o RusTTY faz o trabalho duro para você.
+---
 
-1. Navegue até a aba Personalização e adicione uma nova Keyword (Palavra-Chave).
-2. Escreva, por exemplo, `ERROR` e selecione a cor Vermelha.
-3. Se quiser garantir, crie também `WARNING` e coloque na cor Amarela, e `SUCCESS` em Verde.
+## Destaque de Palavras-Chave
 
-Você também tem a opção de marcar **"Ignorar Maiúsculas/Minúsculas" (Case Insensitive)**. Se essa caixa estiver marcada, a regra de colorir vai funcionar mesmo se o servidor escrever `Error`, `error`, ou `ERROR`. O destaque aparecerá imediatamente na tela assim que o texto for impresso, em tempo real.
+Você define um padrão de texto e uma cor. Toda vez que esse padrão aparece na saída, o RusTTY colore as células correspondentes.
 
-## Inteligência para Redes: Destaque de Endereços IP
-Para especialistas que mexem muito com infraestrutura, ver IPs pulando no meio de parágrafos normais é o sonho de consumo.
+Para adicionar uma keyword: acesse **Personalização**, clique em adicionar, escreva o padrão e escolha a cor. A opção **Case Insensitive** faz o padrão casar independente de capitalização.
 
-O RusTTY reconhece automaticamente qualquer endereço IPv4 na tela. Mas a melhor parte é a customização por trás disso:
+Alguns usos práticos:
 
-- **Modo Cor Única (Unified):** Todos os endereços IPs na tela receberão a mesma cor de destaque (por exemplo, Azul Claro). Simples e elegante.
-- **Modo Inteligente Dividido (Split Mode):** É aqui que a mágica acontece. Se você ativar essa opção, o aplicativo saberá distinguir a classe do IP!
-  - **IPs Públicos:** Endereços da internet (como o IP de sites ou servidores Cloud) serão coloridos com a "Cor Pública".
-  - **IPs Privados:** Endereços de rede local e doméstica (Como redes 192.168.X.X ou 10.X.X.X) receberão a "Cor Privada".
-  - *Exemplo Prático:* Se você estiver lendo logs de tráfego de um servidor, conseguirá ver batendo o olho, pelas cores, se o ataque/visita veio da internet ou de outro computador da rede local.
+| Padrão | Cor sugerida | Por quê |
+|---|---|---|
+| `ERROR` | Vermelho | Identificação imediata em logs de aplicação |
+| `WARNING` | Amarelo | Alertas que precisam de atenção |
+| `CRITICAL` | Vermelho intenso | Eventos de severidade máxima |
+| `SUCCESS` | Verde | Confirmações de operação |
+| `sudo` | Amarelo | Rastrear escalação de privilégio visualmente |
 
-As alterações de customização valem apenas para os novos terminais abertos. Portanto, certifique-se de salvar suas cores e depois abrir a janela de conexão para ver o resultado na tela!
+As regras são avaliadas em ordem de inserção. Se dois padrões se sobrepõem na mesma região de texto, o primeiro vence.
+
+---
+
+## Destaque de Endereços IPv4
+
+O RusTTY reconhece automaticamente endereços IPv4 na saída do terminal. Dois modos disponíveis:
+
+**Modo Unificado** — todos os IPs recebem a mesma cor, independente do range.
+
+**Split Mode** — IPs são classificados pela faixa de alocação e recebem cores diferentes:
+
+- **Privados** (RFC 1918 + loopback + link-local): `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.0.0/16`
+- **Públicos**: qualquer endereço fora dessas faixas
+
+Isso é útil ao ler logs de acesso ou de firewall — dá pra ver de relance se o tráfego veio da internet ou de dentro da rede.
+
+---
+
+## Destaque de Endereços IPv6
+
+A mesma lógica de modo unificado e split se aplica a IPv6, distinguindo link-local (`fe80::/10`), ULA (`fc00::/7`) e endereços globalmente roteáveis.
+
+---
+
+## Quando as alterações entram em vigor
+
+As regras de personalização afetam apenas as sessões abertas **depois** que você salvar. Terminais já abertos não são reprocessados retroativamente — isso exigiria re-parsear o histórico inteiro do scrollback, o que teria custo de CPU proporcional ao tamanho do buffer e poderia causar inconsistências visuais.
+
+Salve as alterações e reabra a conexão para ver o efeito.

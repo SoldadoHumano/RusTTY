@@ -297,6 +297,7 @@ pub enum Message {
     SettingsCustomizationToggled(bool),
     SettingsAllowMultipleAccessToggled(bool),
     SettingsAutoUpdateToggled(bool),
+    SettingsTerminalFontSizeChanged(u8),
 
     // Customization
     CustomizationOpen(CustomizationViewMode),
@@ -964,6 +965,10 @@ impl Application for RusTTYApp {
             }
             Message::SettingsAllowMultipleAccessToggled(val) => {
                 self.client_config.allow_multiple_access_to_same_host = val;
+                let _ = save_client_config(&self.client_config);
+            }
+            Message::SettingsTerminalFontSizeChanged(val) => {
+                self.client_config.terminal_font_size = val.clamp(1, 22);
                 let _ = save_client_config(&self.client_config);
             }
 
@@ -2386,6 +2391,7 @@ impl RusTTYApp {
             self.client_config.enable_customization,
             self.client_config.allow_multiple_access_to_same_host,
             self.client_config.enable_auto_update,
+            self.client_config.terminal_font_size,
         )
     }
 

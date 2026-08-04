@@ -1,5 +1,5 @@
 use iced::{
-    alignment, widget::{container, column, row, text, text_input, toggler, Space, scrollable},
+    alignment, widget::{container, column, row, text, text_input, toggler, slider, Space, scrollable},
     Alignment, Element, Length, theme,
 };
 use crate::app::Message;
@@ -19,6 +19,7 @@ pub fn view<'a>(
     enable_customization: bool,
     allow_multiple_access_to_same_host: bool,
     enable_auto_update: bool,
+    terminal_font_size: u8,
 ) -> Element<'a, Message> {
     // Título
     let title = row![
@@ -106,6 +107,16 @@ pub fn view<'a>(
     ]
     .align_items(Alignment::Center);
 
+    let font_size_row = row![
+        text("Tamanho da fonte").size(16),
+        Space::with_width(Length::Fill),
+        slider(1.0..=22.0, terminal_font_size as f32, |val| Message::SettingsTerminalFontSizeChanged(val as u8))
+            .width(Length::Fixed(120.0)),
+        Space::with_width(12),
+        text(format!("{}", terminal_font_size)).size(14).width(Length::Fixed(24.0)),
+    ]
+    .align_items(Alignment::Center);
+
     let palette_key_row = row![
         text("Tecla do Command Palette (Ctrl + Tecla)").size(16),
         Space::with_width(Length::Fill),
@@ -125,6 +136,11 @@ pub fn view<'a>(
             Space::with_height(16),
             scroll_lines_row,
             text("Define a quantidade de linhas puladas a cada rotação do scroll do mouse no terminal.")
+                .size(12)
+                .style(theme::Text::Color(MUTED)),
+            Space::with_height(16),
+            font_size_row,
+            text("Tamanho da fonte do terminal de conexões SSH.")
                 .size(12)
                 .style(theme::Text::Color(MUTED)),
             Space::with_height(16),
@@ -201,7 +217,7 @@ pub fn view<'a>(
                 row![
                     text("Versão do Cliente").size(16),
                     Space::with_width(Length::Fill),
-                    text("Beta v0.25.3").size(16).style(theme::Text::Color(MUTED)),
+                    text("Beta v0.25.4").size(16).style(theme::Text::Color(MUTED)),
                 ].align_items(Alignment::Center),
                 row![
                     text("Data da Versão").size(16),

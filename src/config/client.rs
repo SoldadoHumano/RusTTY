@@ -60,10 +60,14 @@ pub struct ClientConfig {
     /// Habilita atualização automática do RusTTY.
     #[serde(default = "default_true")]
     pub enable_auto_update: bool,
+    /// Tamanho da fonte do terminal SSH
+    #[serde(default = "default_terminal_font_size")]
+    pub terminal_font_size: u8,
 }
 
 fn default_scroll_lines() -> usize { 1 }
 fn default_command_palette_key() -> char { '.' }
+fn default_terminal_font_size() -> u8 { 14 }
 
 impl Default for ClientConfig {
     fn default() -> Self {
@@ -77,6 +81,7 @@ impl Default for ClientConfig {
             allow_multiple_access_to_same_host: false,
             customization_data: CustomizationConfig::default(),
             enable_auto_update: true,
+            terminal_font_size: 14,
         }
     }
 }

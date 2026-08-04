@@ -112,11 +112,19 @@ pub async fn start_ssh_session(
     bridge_info: Option<Box<(String, u16, String, SshAuth)>>,
 ) {
     let config = Arc::new(Config::default());
-    let addr = format!("{}:{}", host, port);
+    let addr = if host.contains(':') && !host.starts_with('[') {
+        format!("[{}]:{}", host, port)
+    } else {
+        format!("{}:{}", host, port)
+    };
 
     let mut session = if let Some(bridge) = bridge_info {
         let (bridge_host, bridge_port, bridge_user, bridge_auth) = *bridge;
-        let bridge_addr = format!("{}:{}", bridge_host, bridge_port);
+        let bridge_addr = if bridge_host.contains(':') && !bridge_host.starts_with('[') {
+            format!("[{}]:{}", bridge_host, bridge_port)
+        } else {
+            format!("{}:{}", bridge_host, bridge_port)
+        };
         let _ = ui_sender.send(NetworkEvent::Disconnected(format!("Conectando via ponte: {}...", bridge_host))).await;
 
         let mut bridge_session = match russh::client::connect(config.clone(), &bridge_addr, SshClientHandler).await {

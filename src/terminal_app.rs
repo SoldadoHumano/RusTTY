@@ -36,7 +36,7 @@ use crate::config::{
 };
 use crate::net::{NetworkCommand, NetworkEvent, SshAuth};
 use crate::net::ssh::start_ssh_session;
-use crate::terminal::{TerminalState, CellColor, CELL_W, CELL_H, FONT_SIZE};
+use crate::terminal::{TerminalState, CellColor};
 use crate::ui::icons::{icon, icon_sized, LucideIcon};
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -93,6 +93,15 @@ pub struct TerminalApp {
     pub palette_lines_input: String,
 
     pub client_config: crate::config::client::ClientConfig,
+}
+
+impl TerminalApp {
+    #[inline]
+    pub fn font_size(&self) -> f32 { self.client_config.terminal_font_size as f32 }
+    #[inline]
+    pub fn cell_w(&self) -> f32 { self.font_size() * 0.6 }
+    #[inline]
+    pub fn cell_h(&self) -> f32 { (self.font_size() / 14.0) * 19.0 }
 }
 
 // ─── Mensagens ────────────────────────────────────────────────────────────────
@@ -304,9 +313,12 @@ impl Application for TerminalApp {
         let host_name = host_name_display;
 
         // ── 4. Calcula tamanho inicial do PTY a partir do tamanho da janela ───
+        let font_size = client_config.terminal_font_size as f32;
+        let cell_w = font_size * 0.6;
+        let cell_h = (font_size / 14.0) * 19.0;
         let canvas_h  = DEFAULT_WIN_H;
-        let init_cols = (DEFAULT_WIN_W / CELL_W).floor() as usize;
-        let init_rows = (canvas_h / CELL_H).floor() as usize;
+        let init_cols = (DEFAULT_WIN_W / cell_w).floor() as usize;
+        let init_rows = (canvas_h / cell_h).floor() as usize;
         let pty_cols  = init_cols.max(1) as u16;
         let pty_rows  = init_rows.max(1) as u16;
 
@@ -431,8 +443,8 @@ impl Application for TerminalApp {
                 iced::window::Event::Resized { width, height },
             )) => {
                 let canvas_h  = height as f32;
-                let new_cols  = ((width as f32) / CELL_W).floor() as usize;
-                let new_rows  = (canvas_h / CELL_H).floor() as usize;
+                let new_cols  = ((width as f32) / self.cell_w()).floor() as usize;
+                let new_rows  = (canvas_h / self.cell_h()).floor() as usize;
                 
                 // Ignorar redimensionamentos muito pequenos (ex: ao minimizar a janela)
                 // Isso evita que a grade seja esmagada para 1x1 e o histórico truncado ou todo jogado para scrollback.
@@ -841,6 +853,15 @@ struct CanvasDrag {
     start_pos: Option<(usize, usize)>,
 }
 
+impl<'a> TerminalCanvas<'a> {
+    #[inline]
+    pub fn font_size(&self) -> f32 { self.client_config.terminal_font_size as f32 }
+    #[inline]
+    pub fn cell_w(&self) -> f32 { self.font_size() * 0.6 }
+    #[inline]
+    pub fn cell_h(&self) -> f32 { (self.font_size() / 14.0) * 19.0 }
+}
+
 impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
     type State = CanvasDrag;
 
@@ -859,8 +880,8 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
         match event {
             CE::Mouse(ME::ButtonPressed(Button::Left)) => {
                 if let Some(pos) = cursor.position_in(bounds) {
-                    let col = ((pos.x / CELL_W) as usize).min(self.grid.cols.saturating_sub(1));
-                    let row = ((pos.y / CELL_H) as usize).min(self.grid.rows.saturating_sub(1));
+                    let col = ((pos.x / self.cell_w()) as usize).min(self.grid.cols.saturating_sub(1));
+                    let row = ((pos.y / self.cell_h()) as usize).min(self.grid.rows.saturating_sub(1));
                     let abs_top = self.grid.scrollback.len().saturating_sub(self.scroll_offset);
                     let abs_row = abs_top + row;
                     state.dragging = true;
@@ -870,8 +891,8 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
             }
             CE::Mouse(ME::CursorMoved { .. }) if state.dragging => {
                 if let Some(pos) = cursor.position_in(bounds) {
-                    let col = ((pos.x / CELL_W) as usize).min(self.grid.cols.saturating_sub(1));
-                    let row = ((pos.y / CELL_H) as usize).min(self.grid.rows.saturating_sub(1));
+                    let col = ((pos.x / self.cell_w()) as usize).min(self.grid.cols.saturating_sub(1));
+                    let row = ((pos.y / self.cell_h()) as usize).min(self.grid.rows.saturating_sub(1));
                     let abs_top = self.grid.scrollback.len().saturating_sub(self.scroll_offset);
                     let abs_row = abs_top + row;
                     return (Status::Captured, Some(TerminalMessage::SelectionExtend(abs_row, col)));
@@ -880,8 +901,8 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
             CE::Mouse(ME::ButtonReleased(Button::Left)) => {
                 state.dragging = false;
                 if let (Some(pos), Some(start_pos)) = (cursor.position_in(bounds), state.start_pos) {
-                    let col = ((pos.x / CELL_W) as usize).min(self.grid.cols.saturating_sub(1));
-                    let row = ((pos.y / CELL_H) as usize).min(self.grid.rows.saturating_sub(1));
+                    let col = ((pos.x / self.cell_w()) as usize).min(self.grid.cols.saturating_sub(1));
+                    let row = ((pos.y / self.cell_h()) as usize).min(self.grid.rows.saturating_sub(1));
                     let abs_top = self.grid.scrollback.len().saturating_sub(self.scroll_offset);
                     let abs_row = abs_top + row;
                     
@@ -908,7 +929,7 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
                         return (Status::Captured, Some(TerminalMessage::ScrollWheel(y)));
                     }
                     mouse::ScrollDelta::Pixels { y, .. } => {
-                        return (Status::Captured, Some(TerminalMessage::ScrollWheel(y / CELL_H)));
+                        return (Status::Captured, Some(TerminalMessage::ScrollWheel(y / self.cell_h())));
                     }
                 }
             }
@@ -994,14 +1015,14 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
                         if is_ip_char {
                             if word_start.is_none() { word_start = Some(i); }
                         } else if let Some(start) = word_start {
-                            let word = &row_str[start..i];
-                            apply_ip_highlight(word, start, i, &mut custom_colors, &self.client_config.customization_data);
+                            let word: String = chars[start..i].iter().collect();
+                            apply_ip_highlight(&word, start, i, &mut custom_colors, &self.client_config.customization_data);
                             word_start = None;
                         }
                     }
                     if let Some(start) = word_start {
-                        let word = &row_str[start..chars.len()];
-                        apply_ip_highlight(word, start, chars.len(), &mut custom_colors, &self.client_config.customization_data);
+                        let word: String = chars[start..chars.len()].iter().collect();
+                        apply_ip_highlight(&word, start, chars.len(), &mut custom_colors, &self.client_config.customization_data);
                     }
                 }
             }
@@ -1014,8 +1035,8 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
                     &grid.cells[grid_row][col]
                 };
 
-                let x = col as f32 * CELL_W;
-                let y = row as f32 * CELL_H;
+                let x = col as f32 * self.cell_w();
+                let y = row as f32 * self.cell_h();
 
                 let in_sel = has_sel && grid.in_selection(
                     abs_row, col,
@@ -1031,13 +1052,13 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
                     // Highlight de seleção azul
                     frame.fill_rectangle(
                         Point::new(x, y),
-                        Size::new(CELL_W, CELL_H),
+                        Size::new(self.cell_w(), self.cell_h()),
                         Color::from_rgba(0.25, 0.45, 0.85, 0.6),
                     );
                 } else if eff_bg != CellColor::DEFAULT_BG {
                     frame.fill_rectangle(
                         Point::new(x, y),
-                        Size::new(CELL_W, CELL_H),
+                        Size::new(self.cell_w(), self.cell_h()),
                         cell_color_to_iced(eff_bg),
                     );
                 }
@@ -1058,11 +1079,11 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
                         content:              cell.ch.to_string(),
                         position:             Point::new(x, y),
                         color:                fg_color,
-                        size:                 Pixels(FONT_SIZE),
+                        size:                 Pixels(self.font_size()),
                         font:                 MONOSPACE,
                         horizontal_alignment: Horizontal::Left,
                         vertical_alignment:   Vertical::Top,
-                        line_height:          iced::widget::text::LineHeight::Absolute(Pixels(CELL_H)),
+                        line_height:          iced::widget::text::LineHeight::Absolute(Pixels(self.cell_h())),
                         shaping:              iced::widget::text::Shaping::Basic,
                     });
                 }
@@ -1076,12 +1097,12 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
         let screen_row = cr + self.scroll_offset;
         
         if self.cursor_visible && screen_row < grid.rows && cc < grid.cols {
-            let cx = cc as f32 * CELL_W;
-            let cy = screen_row as f32 * CELL_H;
+            let cx = cc as f32 * self.cell_w();
+            let cy = screen_row as f32 * self.cell_h();
             // Cursor como bloco branco sólido
             frame.fill_rectangle(
                 Point::new(cx, cy),
-                Size::new(CELL_W, CELL_H),
+                Size::new(self.cell_w(), self.cell_h()),
                 Color::from_rgba(1.0, 1.0, 1.0, 0.85),
             );
             // Caractere do cursor em cor invertida
@@ -1091,11 +1112,11 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
                     content:              cur_cell.ch.to_string(),
                     position:             Point::new(cx, cy),
                     color:                cell_color_to_iced(CellColor::DEFAULT_BG),
-                    size:                 Pixels(FONT_SIZE),
+                    size:                 Pixels(self.font_size()),
                     font:                 MONOSPACE,
                     horizontal_alignment: Horizontal::Left,
                     vertical_alignment:   Vertical::Top,
-                    line_height:          iced::widget::text::LineHeight::Absolute(Pixels(CELL_H)),
+                    line_height:          iced::widget::text::LineHeight::Absolute(Pixels(self.cell_h())),
                     shaping:              iced::widget::text::Shaping::Basic,
                 });
             }

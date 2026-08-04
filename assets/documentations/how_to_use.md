@@ -1,31 +1,64 @@
-# Como Usar o Terminal
+# Operação do Terminal SSH
 
-Depois de se conectar a um Host, o RusTTY abrirá uma nova janela com a clássica "tela preta". Apesar da simplicidade visual, o motor por trás do nosso terminal foi construído para ser poderoso e extremamente veloz.
+Depois de conectar, o RusTTY abre um processo filho com o emulador de terminal. Esta seção cobre o que acontece nessa janela e como tirar proveito das funcionalidades disponíveis.
 
-Aqui está um guia detalhado para você se tornar um mestre na operação do terminal.
+---
 
-## Copiando e Colando de Forma Inteligente
-Terminais clássicos e o famoso atalho `Ctrl + C / Ctrl + V` geralmente não se dão bem (já que no Linux, Ctrl+C serve para cancelar comandos). No RusTTY, nós adotamos o padrão de ferramentas modernas:
-- **Copiar:** Use o mouse para selecionar o texto na tela. Depois, basta pressionar `Ctrl + Shift + C`.
-- **Colar:** Copiou algum comando no seu navegador? Pressione `Ctrl + Shift + V` para colá-lo instantaneamente dentro do terminal.
-- Você também pode simplesmente clicar com o **Botão Direito do Mouse**. Se você tiver texto selecionado, ele será copiado. Se não houver nada selecionado, o texto que está na sua área de transferência (clipboard) será colado. Muito mais rápido!
+## Como o I/O funciona
 
-## O Poder da Paleta de Comandos (Command Palette)
-Inspirado em editores de código profissionais (como o VSCode), nós incluímos uma barra de ferramentas rápida acessada pelo teclado.
-- Pressione o atalho configurado. Por padrão, é `Ctrl + .` (ponto final). Você pode alterar a tecla na aba de Configurações do gerenciador!
-- Uma janela elegante se sobreporá ao terminal.
-- **Copy All (Copiar Tudo):** Útil quando você rodou um diagnóstico enorme e precisa mandar todo o texto para o seu colega ou salvar em um documento. Com um clique, absolutamente toda a tela e histórico são copiados.
-- **Copy Last (Copiar Últimas X Linhas):** O servidor deu erro na inicialização e soltou mil linhas? Digite o número "100" na caixinha, aperte "Copy Last" e apenas as 100 linhas mais recentes do erro serão copiadas!
-- **Clear Terminal (Limpar Terminal):** Apaga tudo da tela e também remove o histórico (scrollback). Excelente para quando você vai começar uma nova tarefa e quer focar apenas no que virá a seguir.
+O emulador roda um loop assíncrono (`tokio::select!`) que processa dois fluxos ao mesmo tempo:
 
-## Histórico de Rolagem (Scrollback)
-Tudo o que o servidor enviar para você ficará salvo temporariamente no "Scrollback".
-- Use a rodinha do mouse (`Scroll`) para subir e descer pela tela e inspecionar linhas antigas.
-- Para rolar de forma mais rápida, você pode configurar quantos "pulos" o mouse dá por vez na tela de Configurações (A aba de engrenagem). Mudar de 1 para 3 linhas costuma tornar a navegação em grandes arquivos muito mais confortável.
+1. **Dados do servidor → emulador**: bytes recebidos pelo canal SSH são parseados pelo interpretador de sequências de escape e renderizados na grade de células do terminal.
+2. **Input do teclado → servidor**: teclas pressionadas são codificadas e enviadas pelo canal SSH ao processo remoto.
 
-## Redimensionamento Fluído
-O motor do RusTTY percebe imediatamente se você tentar aumentar, maximizar ou encolher a janela. Ele notifica o servidor remoto para ajustar as letras automaticamente, evitando que os textos "quebrem" ou fiquem espremidos, independentemente do monitor que você estiver usando.
+O tipo de terminal negociado com o servidor é `xterm-256color`, configurado durante a alocação do PTY. Isso é o que a variável `$TERM` vai conter no lado remoto.
 
-## Fechando com Segurança
-Terminou o que tinha que fazer? Não precisa procurar comandos de saída se não quiser. 
-Ao simplesmente fechar a janela do terminal no botão "X", o RusTTY cuidará de informar ao servidor para encerrar sua sessão ativamente de forma segura, evitando processos "fantasmas" travados do outro lado.
+---
+
+## Copiar e colar
+
+O conflito clássico de `Ctrl+C` (SIGINT no Unix) vs. copiar/colar é resolvido com atalhos alternativos:
+
+| Ação | Atalho |
+|---|---|
+| Copiar seleção | `Ctrl + Shift + C` |
+| Colar | `Ctrl + Shift + V` |
+| Copiar (se há seleção) / Colar (sem seleção) | Botão direito do mouse |
+
+Selecione texto arrastando o mouse. O clique direito é o atalho mais rápido no dia a dia.
+
+---
+
+## Command Palette
+
+A Command Palette é acessada com `Ctrl + <tecla configurada>` (padrão: `Ctrl + .`) e oferece operações sobre o buffer do terminal:
+
+**Copy All** — copia o conteúdo integral do scrollback, incluindo o histórico que já saiu da área visível. Útil pra capturar saídas longas de diagnóstico sem ter que selecionar manualmente.
+
+**Copy Last N Lines** — copia as últimas N linhas. Informe o número no campo e confirme. Prático pra pegar só o trecho relevante de um log longo.
+
+**Clear Terminal** — apaga a área visível e o histórico de scrollback. Não afeta o processo remoto — é só limpeza visual local.
+
+---
+
+## Scrollback
+
+O buffer de scrollback retém as linhas que saíram da tela. Navegue com a roda do mouse. A quantidade de linhas por evento de scroll e o limite total do buffer são configuráveis em Configurações.
+
+---
+
+## Redimensionamento
+
+Quando você redimensiona a janela do terminal, o emulador recalcula colunas e linhas e envia um `window-change` ao servidor. O kernel remoto manda `SIGWINCH` para o processo em foreground, que pode reajustar o layout — `vim`, `tmux`, `htop` e similares respondem a isso automaticamente.
+
+---
+
+## Tamanho de fonte
+
+Configurável em Configurações. Alterar o tamanho implica recalcular as dimensões do terminal em colunas e linhas, o que dispara automaticamente o `window-change` descrito acima.
+
+---
+
+## Fechar a sessão
+
+Fechar a janela envia `SSH_MSG_CHANNEL_EOF` + `SSH_MSG_CHANNEL_CLOSE` ao servidor, que encerra a sessão e libera os recursos alocados do lado de lá. Você também pode simplesmente digitar `exit` ou `logout` no shell remoto — o servidor manda um `exit-status` e o terminal fecha sozinho.
