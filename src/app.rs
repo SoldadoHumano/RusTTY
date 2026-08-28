@@ -55,6 +55,8 @@ pub struct NewHostForm {
     pub enable_bridge: bool,
     /// ID da ponte selecionada
     pub selected_bridge: Option<uuid::Uuid>,
+    /// Habilita algoritmos SSH legacy para servidores antigos
+    pub legacy_ssh: bool,
 }
 
 impl NewHostForm {
@@ -238,6 +240,7 @@ pub enum Message {
     FormToggleBridge(bool),
     FormSelectedBridgeChanged(uuid::Uuid),
     FormTogglePassword,
+    FormToggleLegacySsh(bool),
     FormSave,
     FormCancel,
 
@@ -298,6 +301,7 @@ pub enum Message {
     SettingsAllowMultipleAccessToggled(bool),
     SettingsAutoUpdateToggled(bool),
     SettingsTerminalFontSizeChanged(u8),
+    SettingsDebugModeToggled(bool),
 
     // Customization
     CustomizationOpen(CustomizationViewMode),
@@ -326,14 +330,14 @@ pub enum Message {
 
 // ─── Design Tokens ───────────────────────────────────────────────────────────
 
-pub const BACKGROUND_COLOR: Color = Color::from_rgb(0.08, 0.08, 0.08);
-pub const SIDEBAR_COLOR: Color    = Color::from_rgb(0.12, 0.12, 0.12);
-pub const TEXT_COLOR: Color       = Color::from_rgb(0.9, 0.9, 0.9);
-pub const PRIMARY_ORANGE: Color   = Color::from_rgb(1.0, 0.45, 0.0);
-pub const ERROR_COLOR: Color      = Color::from_rgb(0.95, 0.3, 0.3);
-pub const MUTED_COLOR: Color      = Color::from_rgb(0.5, 0.5, 0.5);
-pub const WARNING_BG: Color       = Color::from_rgba(0.95, 0.3, 0.3, 0.12);
-pub const SUCCESS_COLOR: Color    = Color::from_rgb(0.2, 0.85, 0.5);
+pub const BACKGROUND_COLOR: Color = Color::from_rgb(0.06, 0.06, 0.07);
+pub const SIDEBAR_COLOR: Color    = Color::from_rgb(0.10, 0.10, 0.11);
+pub const TEXT_COLOR: Color       = Color::from_rgb(0.95, 0.95, 0.96);
+pub const PRIMARY_ORANGE: Color   = Color::from_rgb(0.98, 0.45, 0.10);
+pub const ERROR_COLOR: Color      = Color::from_rgb(0.95, 0.35, 0.35);
+pub const MUTED_COLOR: Color      = Color::from_rgb(0.60, 0.60, 0.63);
+pub const WARNING_BG: Color       = Color::from_rgba(0.95, 0.35, 0.35, 0.12);
+pub const SUCCESS_COLOR: Color    = Color::from_rgb(0.20, 0.80, 0.45);
 
 // ─── Application ─────────────────────────────────────────────────────────────
 
@@ -453,6 +457,10 @@ impl Application for RusTTYApp {
                 self.new_host_form.enable_icmp = v;
                 self.new_host_form.error = None;
             }
+            Message::FormToggleLegacySsh(v) => {
+                self.new_host_form.legacy_ssh = v;
+                self.new_host_form.error = None;
+            }
             Message::FormToggleBridge(v) => {
                 self.new_host_form.enable_bridge = v;
                 if v && self.new_host_form.selected_bridge.is_none() {
@@ -513,6 +521,7 @@ impl Application for RusTTYApp {
                     },
                     enable_icmp: if form.enable_bridge { false } else { form.enable_icmp },
                     bridge_id: if form.enable_bridge { form.selected_bridge } else { None },
+                    legacy_ssh: form.legacy_ssh,
                 };
 
                 if let Some(idx) = self.editing_host {
@@ -797,6 +806,7 @@ impl Application for RusTTYApp {
                     }
                     form.allow_domain = host.address.parse::<std::net::IpAddr>().is_err();
                     form.enable_icmp = host.enable_icmp;
+                    form.legacy_ssh = host.legacy_ssh;
                     if let Some(bid) = host.bridge_id {
                         form.enable_bridge = true;
                         form.selected_bridge = Some(bid);
@@ -969,6 +979,11 @@ impl Application for RusTTYApp {
             }
             Message::SettingsTerminalFontSizeChanged(val) => {
                 self.client_config.terminal_font_size = val.clamp(1, 22);
+                let _ = save_client_config(&self.client_config);
+            }
+            Message::SettingsDebugModeToggled(val) => {
+                self.client_config.debug_mode = val;
+                crate::config::client::DEBUG_MODE.store(val, std::sync::atomic::Ordering::Relaxed);
                 let _ = save_client_config(&self.client_config);
             }
 
@@ -1493,11 +1508,7 @@ impl RusTTYApp {
         for (idx, node) in self.config.root_nodes.iter().enumerate() {
             match node {
                 ConfigNode::Host(host) => {
-                    let auth_icon = match &host.auth {
-                        AuthType::Key { .. } => icon::<Message>(LucideIcon::Key),
-                        AuthType::Password(_) => icon::<Message>(LucideIcon::Lock),
-                        AuthType::None => icon::<Message>(LucideIcon::Shield),
-                    };
+                    // auth_icon removed
 
                     let terminal_icon = if host.enable_icmp && self.client_config.global_icmp {
                         match self.icmp_status.get(&idx) {
@@ -1514,7 +1525,7 @@ impl RusTTYApp {
                         row![
                             terminal_icon,
                             text(format!("  {}  ", host.name)).size(15),
-                            auth_icon,
+                            // auth_icon removido
                             text(format!("  {}@{}:{}", host.username, host.address, host.port))
                                 .size(12)
                                 .style(theme::Text::Color(MUTED_COLOR)),
@@ -1665,6 +1676,14 @@ impl RusTTYApp {
         .size(16)
         .text_size(13);
 
+        let legacy_ssh_checkbox = checkbox(
+            "SSH Legacy (servidores antigos)",
+            form.legacy_ssh,
+        )
+        .on_toggle(Message::FormToggleLegacySsh)
+        .size(16)
+        .text_size(13);
+
         let address_input = column![
             addr_label,
             text_input(addr_hint, &form.address)
@@ -1672,7 +1691,7 @@ impl RusTTYApp {
                 .padding(10)
                 .size(15)
                 .id(text_input::Id::new("host_address")),
-            row![domain_checkbox, icmp_checkbox].spacing(16),
+            row![domain_checkbox, icmp_checkbox, legacy_ssh_checkbox].spacing(16),
         ]
         .spacing(6);
 
@@ -1919,17 +1938,13 @@ impl RusTTYApp {
         }
 
         for (idx, bridge) in self.config.bridges.iter().enumerate() {
-            let auth_icon = match &bridge.auth {
-                crate::config::AuthType::Key { .. } => icon::<Message>(LucideIcon::Key),
-                crate::config::AuthType::Password(_) => icon::<Message>(LucideIcon::Lock),
-                crate::config::AuthType::None => icon::<Message>(LucideIcon::Shield),
-            };
+            // auth_icon removed
 
             let bridge_btn = button(
                 row![
                     icon::<Message>(LucideIcon::Network),
                     text(format!("  {}  ", bridge.name)).size(15),
-                    auth_icon,
+                    // auth_icon removido
                     text(format!("  {}@{}:{}", bridge.username, bridge.address, bridge.port))
                         .size(12)
                         .style(theme::Text::Color(MUTED_COLOR)),
@@ -2392,6 +2407,7 @@ impl RusTTYApp {
             self.client_config.allow_multiple_access_to_same_host,
             self.client_config.enable_auto_update,
             self.client_config.terminal_font_size,
+            self.client_config.debug_mode,
         )
     }
 
@@ -2539,15 +2555,18 @@ impl button::StyleSheet for InvisibleButtonStyle {
             border: iced::Border {
                 color: Color::TRANSPARENT,
                 width: 0.0,
-                radius: 0.0.into(),
+                radius: 8.0.into(),
             },
             text_color: MUTED_COLOR,
             ..Default::default()
         }
     }
     
-    fn hovered(&self, _style: &Self::Style) -> button::Appearance {
-        self.active(_style)
+    fn hovered(&self, style: &Self::Style) -> button::Appearance {
+        let mut app = self.active(style);
+        app.background = Some(Color::from_rgba(1.0, 1.0, 1.0, 0.05).into());
+        app.text_color = TEXT_COLOR;
+        app
     }
     
     fn pressed(&self, _style: &Self::Style) -> button::Appearance {
@@ -2564,11 +2583,11 @@ impl container::StyleSheet for ErrorBoxStyle {
     type Style = Theme;
     fn appearance(&self, _style: &Self::Style) -> container::Appearance {
         container::Appearance {
-            background: Some(Color::from_rgba(0.95, 0.3, 0.3, 0.1).into()),
+            background: Some(Color::from_rgba(0.95, 0.35, 0.35, 0.08).into()),
             border: iced::Border {
-                color: ERROR_COLOR,
+                color: Color::from_rgba(0.95, 0.35, 0.35, 0.3),
                 width: 1.0,
-                radius: 6.0.into(),
+                radius: 8.0.into(),
             },
             text_color: Some(ERROR_COLOR),
             ..Default::default()
@@ -2582,16 +2601,16 @@ impl container::StyleSheet for DeleteConfirmStyle {
     type Style = Theme;
     fn appearance(&self, _style: &Self::Style) -> container::Appearance {
         container::Appearance {
-            background: Some(iced::Background::Color(Color::from_rgb(0.10, 0.10, 0.10))),
+            background: Some(iced::Background::Color(Color::from_rgb(0.12, 0.12, 0.13))),
             border: iced::Border {
-                color: Color::from_rgba(0.95, 0.3, 0.3, 0.4),
+                color: Color::from_rgba(0.95, 0.35, 0.35, 0.3),
                 width: 1.0,
-                radius: 12.0.into(),
+                radius: 16.0.into(),
             },
             shadow: iced::Shadow {
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.8),
-                offset: iced::Vector::new(0.0, 8.0),
-                blur_radius: 20.0,
+                color: Color::from_rgba(0.0, 0.0, 0.0, 0.6),
+                offset: iced::Vector::new(0.0, 12.0),
+                blur_radius: 24.0,
             },
             text_color: Some(TEXT_COLOR),
         }
@@ -2606,17 +2625,19 @@ impl button::StyleSheet for OrangeButtonStyle {
         button::Appearance {
             background: Some(PRIMARY_ORANGE.into()),
             border: iced::Border {
-                color: Color::TRANSPARENT,
-                width: 0.0,
-                radius: 6.0.into(),
+                color: Color::from_rgba(1.0, 1.0, 1.0, 0.1),
+                width: 1.0,
+                radius: 8.0.into(),
             },
             text_color: Color::WHITE,
+            shadow_offset: iced::Vector::new(0.0, 2.0),
             ..Default::default()
         }
     }
     fn hovered(&self, style: &Self::Style) -> button::Appearance {
         let mut app = self.active(style);
-        app.background = Some(Color::from_rgb(1.0, 0.55, 0.1).into());
+        app.background = Some(Color::from_rgb(1.0, 0.52, 0.15).into());
+        app.shadow_offset = iced::Vector::new(0.0, 4.0);
         app
     }
 }
@@ -2626,11 +2647,11 @@ impl container::StyleSheet for HostItemStyle {
     type Style = Theme;
     fn appearance(&self, _style: &Self::Style) -> container::Appearance {
         container::Appearance {
-            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.03).into()),
+            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.02).into()),
             border: iced::Border {
-                color: Color::from_rgba(1.0, 1.0, 1.0, 0.06),
+                color: Color::from_rgba(1.0, 1.0, 1.0, 0.05),
                 width: 1.0,
-                radius: 6.0.into(),
+                radius: 10.0.into(),
             },
             ..Default::default()
         }
@@ -2642,14 +2663,18 @@ impl container::StyleSheet for ContextMenuStyle {
     type Style = Theme;
     fn appearance(&self, _style: &Self::Style) -> container::Appearance {
         container::Appearance {
-            background: Some(Color::from_rgb(0.15, 0.15, 0.15).into()),
+            background: Some(Color::from_rgb(0.12, 0.12, 0.13).into()),
             border: iced::Border {
-                color: Color::from_rgba(1.0, 1.0, 1.0, 0.1),
+                color: Color::from_rgba(1.0, 1.0, 1.0, 0.15),
                 width: 1.0,
-                radius: 4.0.into(),
+                radius: 8.0.into(),
+            },
+            shadow: iced::Shadow {
+                color: Color::from_rgba(0.0, 0.0, 0.0, 0.4),
+                offset: iced::Vector::new(0.0, 4.0),
+                blur_radius: 12.0,
             },
             text_color: Some(TEXT_COLOR),
-            ..Default::default()
         }
     }
 }
@@ -2659,16 +2684,16 @@ impl container::StyleSheet for ToastStyle {
     type Style = Theme;
     fn appearance(&self, _style: &Self::Style) -> container::Appearance {
         container::Appearance {
-            background: Some(iced::Background::Color(Color::from_rgb(0.15, 0.15, 0.15))),
+            background: Some(iced::Background::Color(Color::from_rgb(0.12, 0.12, 0.13))),
             border: iced::Border {
-                color: Color::from_rgba(0.95, 0.3, 0.3, 0.6),
+                color: Color::from_rgba(0.95, 0.35, 0.35, 0.5),
                 width: 1.0,
-                radius: 8.0.into(),
+                radius: 12.0.into(),
             },
             shadow: iced::Shadow {
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
-                offset: iced::Vector::new(0.0, 4.0),
-                blur_radius: 10.0,
+                color: Color::from_rgba(0.0, 0.0, 0.0, 0.4),
+                offset: iced::Vector::new(0.0, 8.0),
+                blur_radius: 16.0,
             },
             text_color: Some(TEXT_COLOR),
         }

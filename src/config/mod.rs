@@ -52,6 +52,13 @@ pub struct HostProfile {
     pub enable_icmp: bool,
     #[serde(default)]
     pub bridge_id: Option<uuid::Uuid>,
+    /// Habilita algoritmos de key exchange legados (diffie-hellman-group1-sha1,
+    /// diffie-hellman-group14-sha1) para compatibilidade com servidores SSH antigos.
+    ///
+    /// # Segurança
+    /// DH-group1-SHA1 é criptograficamente fraco. Use apenas quando necessário.
+    #[serde(default)]
+    pub legacy_ssh: bool,
 }
 
 /// Um perfil de ponte (bridge) salva

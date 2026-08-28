@@ -168,6 +168,20 @@ impl TerminalGrid {
         }
     }
 
+    /// Retorna uma referência à linha correspondente ao índice absoluto `abs_row`.
+    pub fn get_line(&self, abs_row: usize) -> Option<&Vec<Cell>> {
+        if abs_row < self.scrollback.len() {
+            Some(&self.scrollback[abs_row])
+        } else {
+            let active_row = abs_row - self.scrollback.len();
+            if active_row < self.rows {
+                Some(&self.cells[active_row])
+            } else {
+                None
+            }
+        }
+    }
+
     // ── Operações internas ───────────────────────────────────────────────────
 
     fn put_char(&mut self, c: char) {
@@ -689,5 +703,13 @@ impl TerminalState {
 
     pub fn clear_all(&mut self) {
         self.grid.clear_all();
+    }
+
+    /// Reseta completamente o terminal (limpa tela, scrollback e reseta o cursor)
+    pub fn reset(&mut self) {
+        self.grid.clear_all();
+        self.grid.scrollback.clear();
+        self.grid.cursor_row = 0;
+        self.grid.cursor_col = 0;
     }
 }

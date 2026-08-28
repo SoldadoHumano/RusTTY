@@ -4,13 +4,13 @@ use std::fs::File;
 use std::path::PathBuf;
 
 fn main() {
-    println!("cargo:rerun-if-changed=assets/images/rustty_icon.png");
+    println!("cargo:rerun-if-changed=assets/images/iconv2.png");
     println!("cargo:rerun-if-changed=build.rs");
 
     // Only apply the icon on Windows
     if env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows" {
-        let png_path = "assets/images/rustty_icon.png";
-        let ico_path = "assets/images/rustty_icon.ico";
+        let png_path = "assets/images/iconv2.png";
+        let ico_path = "assets/images/iconv2.ico";
 
         // Converter PNG para ICO usando a crate image
         if let Ok(img) = image::open(png_path) {

@@ -165,7 +165,7 @@ pub fn icon_sized<'a, Message: 'a>(icon: LucideIcon, size: u16) -> Element<'a, M
 }
 
 pub fn load_window_icon() -> Option<iced::window::icon::Icon> {
-    let icon_bytes = include_bytes!("../../assets/images/rustty_icon.png");
+    let icon_bytes = include_bytes!("../../assets/images/iconv2.png");
     let img = ::image::load_from_memory(icon_bytes).ok()?;
     let rgba = img.into_rgba8();
     let (width, height) = rgba.dimensions();

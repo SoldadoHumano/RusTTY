@@ -9,12 +9,47 @@
 
 use super::{NetworkCommand, NetworkEvent};
 use russh::client::{Config, Handler, Session};
-use russh::{ChannelId, ChannelMsg};
+use russh::{ChannelId, ChannelMsg, Preferred, kex, cipher, mac};
 use russh_keys::key::KeyPair;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use async_trait::async_trait;
 use zeroize::Zeroize;
+
+// ─── Algoritmos Legacy ──────────────────────────────────────────────────────
+
+/// Lista de KEX ampliada que inclui algoritmos legados para compatibilidade
+/// com servidores SSH antigos (ex: equipamentos de rede, switches, firewalls).
+///
+/// # Segurança
+/// Os algoritmos `diffie-hellman-group1-sha1` e `diffie-hellman-group14-sha1`
+/// são criptograficamente fracos. Essa lista só é usada quando o host possui
+/// `legacy_ssh: true` na configuração.
+const LEGACY_KEX_ORDER: &[kex::Name] = &[
+    kex::CURVE25519,
+    kex::CURVE25519_PRE_RFC_8731,
+    kex::DH_G16_SHA512,
+    kex::DH_G14_SHA256,
+    kex::DH_G14_SHA1,
+    kex::DH_G1_SHA1,
+    kex::EXTENSION_SUPPORT_AS_CLIENT,
+    kex::EXTENSION_OPENSSH_STRICT_KEX_AS_CLIENT,
+];
+
+/// Constrói a `Config` SSH, opcionalmente habilitando algoritmos legacy.
+fn build_ssh_config(legacy_ssh: bool) -> Arc<Config> {
+    let mut config = Config::default();
+    if legacy_ssh {
+        config.preferred = Preferred {
+            kex: LEGACY_KEX_ORDER,
+            ..Preferred::DEFAULT
+        };
+        crate::debug_log!("WARN", "SSH Config: modo legacy habilitado (inclui DH-group1-SHA1, DH-group14-SHA1)");
+    } else {
+        crate::debug_log!("INFO", "SSH Config: modo padrão (algoritmos seguros)");
+    }
+    Arc::new(config)
+}
 
 // ─── Handler ────────────────────────────────────────────────────────────────
 
@@ -76,24 +111,47 @@ async fn authenticate_session(
 ) -> Result<bool, String> {
     match auth {
         SshAuth::Password(password) => {
+            crate::debug_log!("INFO", "Autenticando usuário '{}' por senha", user);
             match session.authenticate_password(user, password.expose_secret()).await {
-                Ok(true) => Ok(true),
-                Ok(false) => Err("Autenticação SSH falhou: credenciais inválidas.".into()),
-                Err(e) => Err(format!("Erro de autenticação: {}", e)),
+                Ok(true) => {
+                    crate::debug_log!("INFO", "Autenticação por senha bem-sucedida para '{}'", user);
+                    Ok(true)
+                }
+                Ok(false) => {
+                    crate::debug_log!("ERROR", "Autenticação por senha falhou para '{}': credenciais inválidas", user);
+                    Err("Autenticação SSH falhou: credenciais inválidas.".into())
+                }
+                Err(e) => {
+                    crate::debug_log!("ERROR", "Erro de autenticação por senha para '{}': {}", user, e);
+                    Err(format!("Erro de autenticação: {}", e))
+                }
             }
         }
         SshAuth::PrivateKey { path, passphrase } => {
+            crate::debug_log!("INFO", "Autenticando usuário '{}' por chave privada: {}", user, path);
             let pass_str = passphrase.as_ref().map(|p| p.expose_secret().to_string());
             let key_pair = match load_private_key(path, pass_str.as_deref()) {
                 Ok(k) => k,
-                Err(e) => return Err(format!("Falha ao carregar chave privada '{}': {}", path, e)),
+                Err(e) => {
+                    crate::debug_log!("ERROR", "Falha ao carregar chave privada '{}': {}", path, e);
+                    return Err(format!("Falha ao carregar chave privada '{}': {}", path, e));
+                }
             };
 
             let key_arc = Arc::new(key_pair);
             match session.authenticate_publickey(user, key_arc).await {
-                Ok(true) => Ok(true),
-                Ok(false) => Err("Autenticação por chave falhou.".into()),
-                Err(e) => Err(format!("Erro de autenticação por chave: {}", e)),
+                Ok(true) => {
+                    crate::debug_log!("INFO", "Autenticação por chave bem-sucedida para '{}'", user);
+                    Ok(true)
+                }
+                Ok(false) => {
+                    crate::debug_log!("ERROR", "Autenticação por chave falhou para '{}'", user);
+                    Err("Autenticação por chave falhou.".into())
+                }
+                Err(e) => {
+                    crate::debug_log!("ERROR", "Erro de autenticação por chave para '{}': {}", user, e);
+                    Err(format!("Erro de autenticação por chave: {}", e))
+                }
             }
         }
     }
@@ -110,13 +168,17 @@ pub async fn start_ssh_session(
     ui_sender: mpsc::Sender<NetworkEvent>,
     mut command_receiver: mpsc::Receiver<NetworkCommand>,
     bridge_info: Option<Box<(String, u16, String, SshAuth)>>,
+    legacy_ssh: bool,
 ) {
-    let config = Arc::new(Config::default());
+    let config = build_ssh_config(legacy_ssh);
     let addr = if host.contains(':') && !host.starts_with('[') {
         format!("[{}]:{}", host, port)
     } else {
         format!("{}:{}", host, port)
     };
+
+    crate::debug_log!("INFO", "Iniciando sessão SSH para {}@{} (PTY: {}x{}, legacy: {})",
+        user, addr, pty_cols, pty_rows, legacy_ssh);
 
     let mut session = if let Some(bridge) = bridge_info {
         let (bridge_host, bridge_port, bridge_user, bridge_auth) = *bridge;
@@ -125,11 +187,16 @@ pub async fn start_ssh_session(
         } else {
             format!("{}:{}", bridge_host, bridge_port)
         };
+        crate::debug_log!("INFO", "Conectando via ponte: {}", bridge_addr);
         let _ = ui_sender.send(NetworkEvent::Disconnected(format!("Conectando via ponte: {}...", bridge_host))).await;
 
         let mut bridge_session = match russh::client::connect(config.clone(), &bridge_addr, SshClientHandler).await {
-            Ok(s) => s,
+            Ok(s) => {
+                crate::debug_log!("INFO", "Conexão TCP à ponte {} estabelecida", bridge_addr);
+                s
+            }
             Err(e) => {
+                crate::debug_log!("ERROR", "Falha ao conectar na ponte {}: {}", bridge_addr, e);
                 let _ = ui_sender.send(NetworkEvent::Error(format!("Falha ao conectar na ponte {}: {}", bridge_addr, e))).await;
                 return;
             }
@@ -143,6 +210,7 @@ pub async fn start_ssh_session(
         let mut channel = match bridge_session.channel_open_direct_tcpip(host.clone(), port as u32, "localhost", 0).await {
             Ok(c) => c,
             Err(e) => {
+                crate::debug_log!("ERROR", "Ponte falhou ao rotear para {}: {}", addr, e);
                 let _ = ui_sender.send(NetworkEvent::Error(format!("Ponte falhou ao rotear para {}: {}", addr, e))).await;
                 return;
             }
@@ -150,16 +218,24 @@ pub async fn start_ssh_session(
 
         let stream = channel.into_stream();
         match russh::client::connect_stream(config.clone(), stream, SshClientHandler).await {
-            Ok(s) => s,
+            Ok(s) => {
+                crate::debug_log!("INFO", "Conexão SSH via ponte estabelecida para {}", addr);
+                s
+            }
             Err(e) => {
+                crate::debug_log!("ERROR", "Falha ao conectar via ponte em {}: {}", addr, e);
                 let _ = ui_sender.send(NetworkEvent::Error(format!("Falha ao conectar via ponte em {}: {}", addr, e))).await;
                 return;
             }
         }
     } else {
         match russh::client::connect(config.clone(), &addr, SshClientHandler).await {
-            Ok(s) => s,
+            Ok(s) => {
+                crate::debug_log!("INFO", "Conexão TCP a {} estabelecida", addr);
+                s
+            }
             Err(e) => {
+                crate::debug_log!("ERROR", "Falha ao conectar em {}: {}", addr, e);
                 let _ = ui_sender.send(NetworkEvent::Error(format!("Falha ao conectar em {}: {}", addr, e))).await;
                 return;
             }
@@ -178,6 +254,7 @@ pub async fn start_ssh_session(
             user, addr
         )))
         .await;
+    crate::debug_log!("INFO", "SSH: Autenticado e conectado a {}@{}", user, addr);
 
     // ── 3. Abrir canal e PTY ─────────────────────────────────────────────────
     let mut channel = match session.channel_open_session().await {
@@ -191,10 +268,12 @@ pub async fn start_ssh_session(
     };
 
     // Solicita terminal interativo xterm-256color com o tamanho real do canvas
+    crate::debug_log!("INFO", "Solicitando PTY xterm-256color {}x{}", pty_cols, pty_rows);
     if let Err(e) = channel
         .request_pty(false, "xterm-256color", pty_cols as u32, pty_rows as u32, 0, 0, &[])
         .await
     {
+        crate::debug_log!("ERROR", "Falha ao alocar PTY: {}", e);
         let _ = ui_sender
             .send(NetworkEvent::Error(format!("Falha ao alocar PTY: {}", e)))
             .await;

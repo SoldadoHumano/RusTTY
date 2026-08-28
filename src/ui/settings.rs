@@ -20,6 +20,7 @@ pub fn view<'a>(
     allow_multiple_access_to_same_host: bool,
     enable_auto_update: bool,
     terminal_font_size: u8,
+    debug_mode: bool,
 ) -> Element<'a, Message> {
     // Título
     let title = row![
@@ -75,6 +76,20 @@ pub fn view<'a>(
                     "".to_string(),
                     enable_auto_update,
                     Message::SettingsAutoUpdateToggled,
+                ).width(Length::Shrink)
+            ].align_items(Alignment::Center),
+            Space::with_height(16),
+            row![
+                column![
+                    text("Modo Debug").size(16),
+                    text("Abre um terminal auxiliar com logs detalhados de conexão SSH e eventos internos. Requer reiniciar o RusTTY para aplicar.")
+                        .size(12)
+                        .style(theme::Text::Color(MUTED)),
+                ].width(Length::Fill),
+                toggler(
+                    "".to_string(),
+                    debug_mode,
+                    Message::SettingsDebugModeToggled,
                 ).width(Length::Shrink)
             ].align_items(Alignment::Center),
         ]
@@ -217,12 +232,12 @@ pub fn view<'a>(
                 row![
                     text("Versão do Cliente").size(16),
                     Space::with_width(Length::Fill),
-                    text("Beta v0.25.4").size(16).style(theme::Text::Color(MUTED)),
+                    text("Beta v1.0.0").size(16).style(theme::Text::Color(MUTED)),
                 ].align_items(Alignment::Center),
                 row![
                     text("Data da Versão").size(16),
                     Space::with_width(Length::Fill),
-                    text("04/08/2026").size(16).style(theme::Text::Color(MUTED)),
+                    text("28/08/2026").size(16).style(theme::Text::Color(MUTED)),
                 ].align_items(Alignment::Center),
                 row![
                     text("Licença").size(16),
@@ -237,7 +252,7 @@ pub fn view<'a>(
                 row![
                     text("Co-desenvolvedor").size(16),
                     Space::with_width(Length::Fill),
-                    text("N/A").size(16).style(theme::Text::Color(MUTED)),
+                    text(" ").size(16).style(theme::Text::Color(MUTED)),
                 ].align_items(Alignment::Center),
                 row![
                     text("Website").size(16),

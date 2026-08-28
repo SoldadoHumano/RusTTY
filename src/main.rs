@@ -15,6 +15,7 @@
 
 mod app;
 mod config;
+mod debug;
 mod net;
 mod terminal;
 mod terminal_app;
@@ -26,7 +27,18 @@ use app::RusTTYApp;
 use terminal_app::run_terminal;
 
 fn main() -> iced::Result {
+    // Carrega configurações do cliente para verificar debug_mode antes de qualquer operação
+    let _client_cfg = config::client::load_client_config();
+
+    // Inicializa logger debug (no-op se debug_mode == false)
+    debug::init_debug_logger();
+    debug_log!("INFO", "RusTTY iniciando...");
+
+    // Spawna terminal de debug se habilitado
+    debug::spawn_debug_terminal();
+
     let args: Vec<String> = std::env::args().collect();
+    debug_log!("INFO", "Args: {:?}", args);
 
     // Detecta modo terminal salvo: `rustty --terminal <host_name>`
     if let Some(pos) = args.iter().position(|a| a == "--terminal") {

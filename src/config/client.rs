@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub static PERFORMANCE_MODE: AtomicBool = AtomicBool::new(false);
+pub static DEBUG_MODE: AtomicBool = AtomicBool::new(false);
 
 fn default_true() -> bool { true }
 
@@ -63,6 +64,9 @@ pub struct ClientConfig {
     /// Tamanho da fonte do terminal SSH
     #[serde(default = "default_terminal_font_size")]
     pub terminal_font_size: u8,
+    /// Modo debug: abre terminal de logging com informações detalhadas de conexão.
+    #[serde(default)]
+    pub debug_mode: bool,
 }
 
 fn default_scroll_lines() -> usize { 1 }
@@ -82,6 +86,7 @@ impl Default for ClientConfig {
             customization_data: CustomizationConfig::default(),
             enable_auto_update: true,
             terminal_font_size: 14,
+            debug_mode: false,
         }
     }
 }
@@ -117,5 +122,6 @@ pub fn load_client_config() -> ClientConfig {
     };
     
     PERFORMANCE_MODE.store(cfg.performance_mode, Ordering::Relaxed);
+    DEBUG_MODE.store(cfg.debug_mode, Ordering::Relaxed);
     cfg
 }

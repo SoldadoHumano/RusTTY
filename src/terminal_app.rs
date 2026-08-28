@@ -112,6 +112,12 @@ pub enum TerminalMessage {
     IcedEvent(iced::Event),
     /// Canvas inicia seleção
     SelectionStart(usize, usize),
+    /// Inicia a seleção já com o arraste (start_r, start_c, curr_r, curr_c)
+    SelectionBeginDrag(usize, usize, usize, usize),
+    /// Seleciona uma palavra (duplo clique)
+    SelectWord(usize, usize),
+    /// Seleciona uma linha (triplo clique)
+    SelectLine(usize),
     /// Canvas estende seleção
     SelectionExtend(usize, usize),
     /// Limpa a seleção atual
@@ -191,6 +197,7 @@ impl Application for TerminalApp {
                             auth: b.auth.clone(),
                             enable_icmp: false,
                             bridge_id: None, // Para não fazer loop infinito
+                            legacy_ssh: false,
                         }
                     });
                     ("Ponte".to_string(), h)
@@ -215,6 +222,7 @@ impl Application for TerminalApp {
                     auth,
                     enable_icmp: false,
                     bridge_id: None,
+                    legacy_ssh: false,
                 };
                 (address, Some(h))
             }
@@ -335,6 +343,7 @@ impl Application for TerminalApp {
         let host_addr = host.address.clone();
         let host_port = host.port;
         let host_user = host.username.clone();
+        let host_legacy_ssh = host.legacy_ssh;
 
         let spawn_cmd = Command::perform(
             async move {
@@ -343,6 +352,7 @@ impl Application for TerminalApp {
                     ssh_auth, pty_cols, pty_rows,
                     event_tx, cmd_rx,
                     bridge_info,
+                    host_legacy_ssh,
                 ));
             },
             |_| TerminalMessage::Noop,
@@ -409,10 +419,9 @@ impl Application for TerminalApp {
             // ── Eventos SSH ──────────────────────────────────────────────────
             TerminalMessage::SshEvent(event) => {
                 match event {
-                    NetworkEvent::Connected(msg) => {
+                    NetworkEvent::Connected(_msg) => {
                         self.status = TerminalStatus::Connected;
-                        let banner = format!("\r\n── {} ──\r\n\r\n", msg);
-                        self.terminal.process_bytes(banner.as_bytes());
+                        self.terminal.reset();
                     }
                     NetworkEvent::DataReceived(bytes) => {
                         self.terminal.process_bytes(&bytes);
@@ -474,6 +483,39 @@ impl Application for TerminalApp {
             TerminalMessage::SelectionStart(r, c) => {
                 self.sel_anchor = Some((r, c));
                 self.sel_cursor = Some((r, c));
+            }
+            TerminalMessage::SelectionBeginDrag(sr, sc, cr, cc) => {
+                self.sel_anchor = Some((sr, sc));
+                self.sel_cursor = Some((cr, cc));
+            }
+            TerminalMessage::SelectWord(r, c) => {
+                if let Some(line) = self.terminal.grid.get_line(r) {
+                    // Descobre a palavra em 'line' na coluna 'c'
+                    let mut start_c = c;
+                    let mut end_c = c;
+                    
+                    // Funções auxiliares para saber se é parte da palavra
+                    let is_word_char = |ch: char| {
+                        ch.is_alphanumeric() || ch == '_' || ch == '-' || ch == '.' || ch == ':'
+                    };
+
+                    if c < line.len() && is_word_char(line[c].ch) {
+                        while start_c > 0 && is_word_char(line[start_c - 1].ch) {
+                            start_c -= 1;
+                        }
+                        while end_c + 1 < line.len() && is_word_char(line[end_c + 1].ch) {
+                            end_c += 1;
+                        }
+                    }
+                    
+                    self.sel_anchor = Some((r, start_c));
+                    self.sel_cursor = Some((r, end_c));
+                }
+            }
+            TerminalMessage::SelectLine(r) => {
+                let cols = self.terminal.grid.cols;
+                self.sel_anchor = Some((r, 0));
+                self.sel_cursor = Some((r, cols.saturating_sub(1)));
             }
             TerminalMessage::SelectionExtend(r, c) => {
                 self.sel_cursor = Some((r, c));
@@ -850,7 +892,10 @@ struct TerminalCanvas<'a> {
 #[derive(Default)]
 struct CanvasDrag {
     dragging: bool,
+    has_dragged: bool,
     start_pos: Option<(usize, usize)>,
+    last_click_time: Option<std::time::Instant>,
+    click_count: u8,
 }
 
 impl<'a> TerminalCanvas<'a> {
@@ -885,16 +930,48 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
                     let abs_top = self.grid.scrollback.len().saturating_sub(self.scroll_offset);
                     let abs_row = abs_top + row;
                     state.dragging = true;
+                    state.has_dragged = false;
                     state.start_pos = Some((abs_row, col));
-                    return (Status::Captured, Some(TerminalMessage::SelectionStart(abs_row, col)));
+                    
+                    let now = std::time::Instant::now();
+                    if let Some(last) = state.last_click_time {
+                        if now.duration_since(last).as_millis() < 500 {
+                            state.click_count += 1;
+                        } else {
+                            state.click_count = 1;
+                        }
+                    } else {
+                        state.click_count = 1;
+                    }
+                    state.last_click_time = Some(now);
+
+                    let msg = match state.click_count {
+                        2 => Some(TerminalMessage::SelectWord(abs_row, col)),
+                        3 | _ if state.click_count >= 3 => {
+                            state.click_count = 3; // cap at 3
+                            Some(TerminalMessage::SelectLine(abs_row))
+                        }
+                        _ => None, // Não inicia a seleção visualmente no clique simples
+                    };
+
+                    return (Status::Captured, msg);
                 }
             }
             CE::Mouse(ME::CursorMoved { .. }) if state.dragging => {
+                let is_first_drag = !state.has_dragged;
+                state.has_dragged = true;
                 if let Some(pos) = cursor.position_in(bounds) {
                     let col = ((pos.x / self.cell_w()) as usize).min(self.grid.cols.saturating_sub(1));
                     let row = ((pos.y / self.cell_h()) as usize).min(self.grid.rows.saturating_sub(1));
                     let abs_top = self.grid.scrollback.len().saturating_sub(self.scroll_offset);
                     let abs_row = abs_top + row;
+                    
+                    if is_first_drag && state.click_count == 1 {
+                        if let Some((start_r, start_c)) = state.start_pos {
+                            return (Status::Captured, Some(TerminalMessage::SelectionBeginDrag(start_r, start_c, abs_row, col)));
+                        }
+                    }
+                    
                     return (Status::Captured, Some(TerminalMessage::SelectionExtend(abs_row, col)));
                 }
             }
@@ -908,13 +985,15 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
                     
                     if (abs_row, col) == start_pos {
                         // Clique simples (sem drag)
-                        // Apenas consideramos mover cursor se for na viewport atual e na linha do cursor real
-                        let cursor_abs_row = self.grid.scrollback.len() + self.grid.cursor_row;
-                        if abs_row == cursor_abs_row {
-                            let diff = col as isize - self.grid.cursor_col as isize;
-                            return (Status::Captured, Some(TerminalMessage::MoveCursorLeftRight(diff)));
-                        } else {
-                            return (Status::Captured, Some(TerminalMessage::ClearSelection));
+                        // Só move o cursor se for um clique único na linha atual.
+                        if state.click_count <= 1 {
+                            let cursor_abs_row = self.grid.scrollback.len() + self.grid.cursor_row;
+                            if abs_row == cursor_abs_row && !state.has_dragged {
+                                let diff = col as isize - self.grid.cursor_col as isize;
+                                return (Status::Captured, Some(TerminalMessage::MoveCursorLeftRight(diff)));
+                            } else if !state.has_dragged {
+                                return (Status::Captured, Some(TerminalMessage::ClearSelection));
+                            }
                         }
                     }
                 }
