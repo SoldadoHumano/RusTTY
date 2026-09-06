@@ -271,7 +271,7 @@ pub fn view<'a>(
                 row![
                     text("Data da Versão").size(16),
                     Space::with_width(Length::Fill),
-                    text("09/08/2026").size(16).style(theme::Text::Color(MUTED)),
+                    text("05/09/2026").size(16).style(theme::Text::Color(MUTED)),
                 ].align_items(Alignment::Center),
                 row![
                     text("Licença").size(16),
