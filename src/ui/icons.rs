@@ -171,3 +171,20 @@ pub fn load_window_icon() -> Option<iced::window::icon::Icon> {
     let (width, height) = rgba.dimensions();
     iced::window::icon::from_rgba(rgba.into_raw(), width, height).ok()
 }
+
+static RUSTTY_LOGO: std::sync::OnceLock<iced::widget::image::Handle> = std::sync::OnceLock::new();
+
+pub fn get_rustty_logo() -> iced::widget::image::Handle {
+    RUSTTY_LOGO.get_or_init(|| {
+        let icon_bytes = include_bytes!("../../assets/images/iconv2.png");
+        if let Ok(img) = ::image::load_from_memory(icon_bytes) {
+            let resized = img.resize(64, 64, ::image::imageops::FilterType::Lanczos3);
+            let rgba = resized.to_rgba8();
+            let width = rgba.width();
+            let height = rgba.height();
+            iced::widget::image::Handle::from_pixels(width, height, rgba.into_raw())
+        } else {
+            iced::widget::image::Handle::from_memory(icon_bytes.to_vec())
+        }
+    }).clone()
+}

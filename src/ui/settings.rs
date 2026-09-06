@@ -21,6 +21,8 @@ pub fn view<'a>(
     enable_auto_update: bool,
     terminal_font_size: u8,
     debug_mode: bool,
+    antialiasing: bool,
+    experimental_webview_ui: bool,
 ) -> Element<'a, Message> {
     // Título
     let title = row![
@@ -90,6 +92,38 @@ pub fn view<'a>(
                     "".to_string(),
                     debug_mode,
                     Message::SettingsDebugModeToggled,
+                ).width(Length::Shrink)
+            ].align_items(Alignment::Center),
+            Space::with_height(16),
+            row![
+                column![
+                    text("Antialiasing").size(16),
+                    text("Habilita a suavização de bordas na interface. Desative para melhorar muito a performance em computadores mais lentos ou com gráficos integrados antigos.")
+                        .size(12)
+                        .style(theme::Text::Color(MUTED)),
+                ].width(Length::Fill),
+                toggler(
+                    "".to_string(),
+                    antialiasing,
+                    Message::SettingsAntialiasingToggled,
+                ).width(Length::Shrink)
+            ].align_items(Alignment::Center),
+            Space::with_height(16),
+            row![
+                column![
+                    row![
+                        text("EXPERIMENTAL").size(12).style(theme::Text::Color(crate::app::ERROR_COLOR)),
+                        Space::with_width(8),
+                        text("Interface Webview").size(16),
+                    ].align_items(Alignment::Center),
+                    text("Habilita a nova interface baseada em web (em desenvolvimento). O terminal SSH continuará inalterado.")
+                        .size(12)
+                        .style(theme::Text::Color(MUTED)),
+                ].width(Length::Fill),
+                toggler(
+                    "".to_string(),
+                    experimental_webview_ui,
+                    Message::SettingsExperimentalWebviewToggled,
                 ).width(Length::Shrink)
             ].align_items(Alignment::Center),
         ]
@@ -227,17 +261,17 @@ pub fn view<'a>(
                 row![
                     text("Nome do Cliente").size(16),
                     Space::with_width(Length::Fill),
-                    text("RusTTY Beta").size(16).style(theme::Text::Color(MUTED)),
+                    text("RusTTY Experimental").size(16).style(theme::Text::Color(MUTED)),
                 ].align_items(Alignment::Center),
                 row![
                     text("Versão do Cliente").size(16),
                     Space::with_width(Length::Fill),
-                    text("Beta v1.0.0").size(16).style(theme::Text::Color(MUTED)),
+                    text("v1.1.0").size(16).style(theme::Text::Color(MUTED)),
                 ].align_items(Alignment::Center),
                 row![
                     text("Data da Versão").size(16),
                     Space::with_width(Length::Fill),
-                    text("28/08/2026").size(16).style(theme::Text::Color(MUTED)),
+                    text("09/08/2026").size(16).style(theme::Text::Color(MUTED)),
                 ].align_items(Alignment::Center),
                 row![
                     text("Licença").size(16),

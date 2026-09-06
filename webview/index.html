@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RusTTY</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- ═══ App Shell ═══ -->
+    <div id="app" class="app">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <img class="sidebar-logo" src="assets/images/iconv2.png" alt="RusTTY" draggable="false">
+                <span class="sidebar-title">RusTTY</span>
+            </div>
+            <nav id="sidebar-nav" class="sidebar-nav"></nav>
+            <div class="sidebar-footer">
+                <button id="dev-link" class="sidebar-footer-link">Developed by Vitor</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main id="main-content" class="main-content">
+            <div id="view-container" class="view-container"></div>
+        </main>
+    </div>
+
+    <!-- Modal Overlay -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div id="modal-content" class="modal-content"></div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Context Menu (shared) -->
+    <div id="context-menu" class="context-menu"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

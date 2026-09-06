@@ -302,6 +302,8 @@ pub enum Message {
     SettingsAutoUpdateToggled(bool),
     SettingsTerminalFontSizeChanged(u8),
     SettingsDebugModeToggled(bool),
+    SettingsAntialiasingToggled(bool),
+    SettingsExperimentalWebviewToggled(bool),
 
     // Customization
     CustomizationOpen(CustomizationViewMode),
@@ -986,6 +988,14 @@ impl Application for RusTTYApp {
                 crate::config::client::DEBUG_MODE.store(val, std::sync::atomic::Ordering::Relaxed);
                 let _ = save_client_config(&self.client_config);
             }
+            Message::SettingsAntialiasingToggled(val) => {
+                self.client_config.antialiasing = val;
+                let _ = save_client_config(&self.client_config);
+            }
+            Message::SettingsExperimentalWebviewToggled(val) => {
+                self.client_config.experimental_webview_ui = val;
+                let _ = save_client_config(&self.client_config);
+            }
 
             // ── Customization Messages ──────────────────────────────────────
             Message::CustomizationOpen(mode) => {
@@ -1369,9 +1379,15 @@ impl RusTTYApp {
     /// Sidebar de navegação com ícones Lucide.
     fn view_sidebar(&self) -> Element<'_, Message> {
         let nav = column![
-            text("RusTTY")
-                .size(28)
-                .style(theme::Text::Color(PRIMARY_ORANGE)),
+            row![
+                iced::widget::image(crate::ui::icons::get_rustty_logo())
+                    .width(Length::Fixed(32.0))
+                    .height(Length::Fixed(32.0)),
+                Space::with_width(Length::Fixed(8.0)),
+                text("RusTTY")
+                    .size(28)
+                    .style(theme::Text::Color(PRIMARY_ORANGE)),
+            ].align_items(Alignment::Center),
 
             button(
                 row![
@@ -2408,6 +2424,8 @@ impl RusTTYApp {
             self.client_config.enable_auto_update,
             self.client_config.terminal_font_size,
             self.client_config.debug_mode,
+            self.client_config.antialiasing,
+            self.client_config.experimental_webview_ui,
         )
     }
 

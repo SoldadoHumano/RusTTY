@@ -1057,11 +1057,19 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
                     row_str.push(cell.ch);
                 }
 
+                let mut row_str_lower = None;
                 // Palavras chave
                 for kw in &self.client_config.customization_data.keywords {
                     if let Ok(color) = crate::app::hex_to_color(&kw.color) {
                         let target = if kw.case_insensitive { kw.keyword.to_lowercase() } else { kw.keyword.clone() };
-                        let search_in = if kw.case_insensitive { row_str.to_lowercase() } else { row_str.clone() };
+                        let search_in = if kw.case_insensitive {
+                            if row_str_lower.is_none() {
+                                row_str_lower = Some(row_str.to_lowercase());
+                            }
+                            row_str_lower.as_ref().unwrap()
+                        } else {
+                            &row_str
+                        };
                         
                         let mut start_idx = 0;
                         while let Some(idx) = search_in[start_idx..].find(&target) {
@@ -1106,6 +1114,11 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
                 }
             }
 
+            let mut text_segment = String::new();
+            let mut current_fg: Option<Color> = None;
+            let mut segment_start_x = 0.0;
+            let y = row as f32 * self.cell_h();
+
             for col in 0..grid.cols {
                 let cell = if from_scrollback {
                     &grid.scrollback[abs_row][col]
@@ -1115,7 +1128,6 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
                 };
 
                 let x = col as f32 * self.cell_w();
-                let y = row as f32 * self.cell_h();
 
                 let in_sel = has_sel && grid.in_selection(
                     abs_row, col,
@@ -1128,7 +1140,6 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
 
                 // Fundo da célula
                 if in_sel {
-                    // Highlight de seleção azul
                     frame.fill_rectangle(
                         Point::new(x, y),
                         Size::new(self.cell_w(), self.cell_h()),
@@ -1142,30 +1153,51 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
                     );
                 }
 
-                // Caractere (pula espaços padrão para performance)
-                if cell.ch != ' ' {
-                    let mut fg_color = if in_sel {
-                        Color::WHITE
-                    } else {
-                        cell_color_to_iced(eff_fg)
-                    };
+                let mut fg_color = if in_sel {
+                    Color::WHITE
+                } else {
+                    cell_color_to_iced(eff_fg)
+                };
 
-                    if let Some(c) = custom_colors[col] {
-                        if !in_sel { fg_color = c; }
-                    }
-
-                    frame.fill_text(canvas::Text {
-                        content:              cell.ch.to_string(),
-                        position:             Point::new(x, y),
-                        color:                fg_color,
-                        size:                 Pixels(self.font_size()),
-                        font:                 MONOSPACE,
-                        horizontal_alignment: Horizontal::Left,
-                        vertical_alignment:   Vertical::Top,
-                        line_height:          iced::widget::text::LineHeight::Absolute(Pixels(self.cell_h())),
-                        shaping:              iced::widget::text::Shaping::Basic,
-                    });
+                if let Some(c) = custom_colors[col] {
+                    if !in_sel { fg_color = c; }
                 }
+
+                if current_fg == Some(fg_color) {
+                    text_segment.push(cell.ch);
+                } else {
+                    if !text_segment.trim().is_empty() {
+                        frame.fill_text(canvas::Text {
+                            content:              text_segment.clone(),
+                            position:             Point::new(segment_start_x, y),
+                            color:                current_fg.unwrap(),
+                            size:                 Pixels(self.font_size()),
+                            font:                 MONOSPACE,
+                            horizontal_alignment: Horizontal::Left,
+                            vertical_alignment:   Vertical::Top,
+                            line_height:          iced::widget::text::LineHeight::Absolute(Pixels(self.cell_h())),
+                            shaping:              iced::widget::text::Shaping::Basic,
+                        });
+                    }
+                    text_segment.clear();
+                    current_fg = Some(fg_color);
+                    segment_start_x = x;
+                    text_segment.push(cell.ch);
+                }
+            }
+
+            if !text_segment.trim().is_empty() {
+                frame.fill_text(canvas::Text {
+                    content:              text_segment,
+                    position:             Point::new(segment_start_x, y),
+                    color:                current_fg.unwrap(),
+                    size:                 Pixels(self.font_size()),
+                    font:                 MONOSPACE,
+                    horizontal_alignment: Horizontal::Left,
+                    vertical_alignment:   Vertical::Top,
+                    line_height:          iced::widget::text::LineHeight::Absolute(Pixels(self.cell_h())),
+                    shaping:              iced::widget::text::Shaping::Basic,
+                });
             }
         }
 
@@ -1271,6 +1303,7 @@ pub fn run_terminal(init: TerminalInit) -> iced::Result {
         TerminalInit::QuickSsh { address, .. } => address.clone(),
     };
     
+    let cfg = crate::config::client::load_client_config();
     TerminalApp::run(iced::Settings {
         fonts: vec![],
         flags:  init,
@@ -1281,6 +1314,7 @@ pub fn run_terminal(init: TerminalInit) -> iced::Result {
             icon: crate::ui::icons::load_window_icon(),
             ..Default::default()
         },
+        antialiasing: cfg.antialiasing,
         ..iced::Settings::default()
     })
 }

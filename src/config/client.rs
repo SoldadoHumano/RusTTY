@@ -67,6 +67,12 @@ pub struct ClientConfig {
     /// Modo debug: abre terminal de logging com informações detalhadas de conexão.
     #[serde(default)]
     pub debug_mode: bool,
+    /// Habilita antialiasing no Iced.
+    #[serde(default)]
+    pub antialiasing: bool,
+    /// [Experimental] Habilita a nova interface baseada em webview.
+    #[serde(default)]
+    pub experimental_webview_ui: bool,
 }
 
 fn default_scroll_lines() -> usize { 1 }
@@ -87,6 +93,8 @@ impl Default for ClientConfig {
             enable_auto_update: true,
             terminal_font_size: 14,
             debug_mode: false,
+            antialiasing: false,
+            experimental_webview_ui: false,
         }
     }
 }
@@ -124,4 +132,47 @@ pub fn load_client_config() -> ClientConfig {
     PERFORMANCE_MODE.store(cfg.performance_mode, Ordering::Relaxed);
     DEBUG_MODE.store(cfg.debug_mode, Ordering::Relaxed);
     cfg
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SettingDefinition {
+    pub key: String,
+    pub label: String,
+    pub description: String,
+    pub setting_type: String, // "boolean", "number", "text", "char"
+    pub category: String,
+    pub webview_only: bool,
+}
+
+impl SettingDefinition {
+    pub fn new(key: &str, label: &str, desc: &str, t: &str, cat: &str, wo: bool) -> Self {
+        Self {
+            key: key.to_string(),
+            label: label.to_string(),
+            description: desc.to_string(),
+            setting_type: t.to_string(),
+            category: cat.to_string(),
+            webview_only: wo,
+        }
+    }
+}
+
+pub fn get_settings_schema() -> Vec<SettingDefinition> {
+    vec![
+        SettingDefinition::new("experimental_webview_ui", "Interface Webview (Beta)", "Usar a nova interface moderna construída com tecnologias web.", "boolean", "Geral", true),
+        SettingDefinition::new("enable_auto_update", "Atualização Automática", "Busca e instala atualizações silenciosamente em segundo plano.", "boolean", "Geral", false),
+        SettingDefinition::new("command_palette_key", "Tecla da Command Palette", "Ex: '.' para Ctrl+.", "char", "Geral", false),
+        SettingDefinition::new("allow_multiple_access_to_same_host", "Múltiplas Conexões", "Permitir abrir o mesmo Host várias vezes simultaneamente.", "boolean", "Geral", false),
+        
+        SettingDefinition::new("global_icmp", "ICMP Global", "Monitorar o status online/offline dos Hosts automaticamente via Ping.", "boolean", "Rede", false),
+        
+        SettingDefinition::new("terminal_font_size", "Tamanho da Fonte", "Tamanho da fonte renderizada no terminal (padrão 14).", "number", "Terminal", false),
+        SettingDefinition::new("max_scrollback_lines", "Linhas de Histórico", "Máximo de linhas retidas no buffer para rolagem para cima.", "number", "Terminal", false),
+        SettingDefinition::new("scroll_lines", "Sensibilidade do Scroll", "Quantidade de linhas puladas a cada rolagem do mouse.", "number", "Terminal", false),
+        SettingDefinition::new("antialiasing", "Antialiasing (Suavização)", "Suavizar renderização de fontes e formas. Pode impactar o consumo da CPU no Iced.", "boolean", "Terminal", false),
+        SettingDefinition::new("performance_mode", "Modo Performance", "Reduz as atualizações da UI para maximizar a fluidez no terminal legacy.", "boolean", "Terminal", false),
+        
+        SettingDefinition::new("enable_customization", "Personalização (Highlighter)", "Habilitar destaque inteligente de IPs e palavras customizadas.", "boolean", "Personalização", false),
+        SettingDefinition::new("debug_mode", "Modo Debug", "Habilitar modo de diagnóstico extra (Requer reinício).", "boolean", "Avançado", false),
+    ]
 }

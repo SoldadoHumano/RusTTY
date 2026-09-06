@@ -21,6 +21,7 @@ mod terminal;
 mod terminal_app;
 mod ui;
 mod update;
+mod webview_app;
 
 use iced::{Application, Settings};
 use app::RusTTYApp;
@@ -68,6 +69,11 @@ fn main() -> iced::Result {
     }
 
     // Modo padrão: gerenciador de conexões
+    if _client_cfg.experimental_webview_ui {
+        debug_log!("INFO", "Iniciando Webview UI (Experimental)");
+        return webview_app::run();
+    }
+
     RusTTYApp::run(Settings {
         // Registra a fonte Lucide para que o renderer possa exibir os ícones.
         // O TTF está embutido no binário via include_bytes! em ui::icons.
@@ -78,6 +84,7 @@ fn main() -> iced::Result {
             icon: crate::ui::icons::load_window_icon(),
             ..iced::window::Settings::default()
         },
+        antialiasing: _client_cfg.antialiasing,
         ..Settings::default()
     })
 }
