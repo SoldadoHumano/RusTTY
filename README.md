@@ -29,9 +29,9 @@ RusTTY was designed to be lightweight. Your old 2014 server should be fine. If i
 | Component | Requirement |
 |-----------|-------------|
 | CPU | 2 vCPU @ 1.5GHz (amd64) — or a reasonably fast potato |
-| Memory | 128MB RAM — unlike your browser, we don't hoard it |
+| Memory | 64MB RAM — unlike your browser, we don't hoard it |
 | Graphics | Intel HD Graphics 4000 — if it can draw pixels, it works |
-| Storage | 25MB — fewer megabytes than a single `node_modules` folder |
+| Storage | 30MB — fewer megabytes than a single `node_modules` folder |
 | Operating System | Windows Server 2012 R2 or newer |
 
 ## Recommended Requirements
