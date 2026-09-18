@@ -696,6 +696,7 @@ impl Application for RusTTYApp {
                 };
 
                 self.spawn_error = None;
+                crate::debug_log!("INFO", "RusTTYApp: Iniciando conexão rápida para '{}@{}:{}'", form.username.trim(), form.address.trim(), port);
                 match std::env::current_exe() {
                     Ok(exe_path) => {
                         if let Err(e) = std::process::Command::new(&exe_path)
@@ -706,8 +707,10 @@ impl Application for RusTTYApp {
                                 form.username.trim(),
                                 &pass
                             ])
+                            .env("RUSTTY_CHILD", "1")
                             .spawn()
                         {
+                            crate::debug_log!("ERROR", "RusTTYApp: Falha ao abrir conexão rápida: {}", e);
                             self.spawn_error = Some(format!("Falha ao abrir terminal: {}", e));
                         }
                     }
@@ -741,14 +744,18 @@ impl Application for RusTTYApp {
 
                 match std::env::current_exe() {
                     Ok(exe_path) => {
+                        crate::debug_log!("INFO", "RusTTYApp: Abrindo terminal para host '{}'", host_name);
                         match std::process::Command::new(&exe_path)
                             .args(["--terminal", &host_name])
+                            .env("RUSTTY_CHILD", "1")
                             .spawn()
                         {
                             Ok(child) => {
+                                crate::debug_log!("INFO", "RusTTYApp: Terminal aberto com PID: {}", child.id());
                                 self.active_terminals.insert(host_name, child);
                             }
                             Err(e) => {
+                                crate::debug_log!("ERROR", "RusTTYApp: Falha ao abrir terminal para '{}': {}", host_name, e);
                                 self.spawn_error = Some(format!(
                                     "Falha ao abrir terminal: {}",
                                     e
@@ -891,14 +898,18 @@ impl Application for RusTTYApp {
 
                     match std::env::current_exe() {
                         Ok(exe_path) => {
+                            crate::debug_log!("INFO", "RusTTYApp: Abrindo terminal para a ponte '{}'", bridge_name);
                             match std::process::Command::new(&exe_path)
                                 .args(["--bridge-terminal", &bridge.id.to_string()])
+                                .env("RUSTTY_CHILD", "1")
                                 .spawn()
                             {
                                 Ok(child) => {
+                                    crate::debug_log!("INFO", "RusTTYApp: Terminal de ponte aberto com PID: {}", child.id());
                                     self.active_terminals.insert(bridge_name, child);
                                 }
                                 Err(e) => {
+                                    crate::debug_log!("ERROR", "RusTTYApp: Falha ao abrir ponte '{}': {}", bridge_name, e);
                                     self.spawn_error = Some(format!("Falha ao abrir terminal: {}", e));
                                     return Command::perform(
                                         async { tokio::time::sleep(std::time::Duration::from_secs(3)).await },
@@ -986,6 +997,11 @@ impl Application for RusTTYApp {
             Message::SettingsDebugModeToggled(val) => {
                 self.client_config.debug_mode = val;
                 crate::config::client::DEBUG_MODE.store(val, std::sync::atomic::Ordering::Relaxed);
+                crate::debug_log!("INFO", "RusTTYApp: Modo debug alternado para {}", val);
+                if val {
+                    crate::debug::init_debug_logger(false);
+                    crate::debug::spawn_debug_terminal();
+                }
                 let _ = save_client_config(&self.client_config);
             }
             Message::SettingsAntialiasingToggled(val) => {

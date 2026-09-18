@@ -1,6 +1,6 @@
 [package]
 name = "rustty"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2021"
 
 [dependencies]
@@ -32,6 +32,8 @@ reqwest = { version = "0.13.4", features = ["blocking", "rustls"] }
 tokio-util = { version = "0.7.19", features = ["io"] }
 wry = "0.44"
 winit = "0.29.15"
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.52.0", features = [

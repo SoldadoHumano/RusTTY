@@ -297,14 +297,18 @@ input, textarea, select, button {
   padding: var(--sp-10);
 }
 
-.view-inner {
-  max-width: var(--form-max-width);
+.view-inner,
+.view-inner--wide {
   margin: 0 auto;
   width: 100%;
 }
 
+.view-inner {
+  max-width: var(--form-max-width);
+}
+
 .view-inner--wide {
-  max-width: 800px;
+  max-width: 980px;
 }
 
 /* ─── Page Header ────────────────────────────────────────────────────────── */
@@ -800,7 +804,12 @@ input, textarea, select, button {
 }
 
 .checkbox-wrapper input[type="checkbox"] {
-  display: none;
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+  pointer-events: none;
 }
 
 .checkbox-box {
@@ -1532,6 +1541,7 @@ input, textarea, select, button {
 
 .animate-fade-in {
   animation: fadeIn var(--duration-slow) var(--ease-smooth) forwards;
+  width: 100%;
 }
 
 .animate-slide-in {

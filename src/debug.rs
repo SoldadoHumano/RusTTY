@@ -2,12 +2,11 @@
 //!
 //! # Arquitetura
 //! - `debug_log!()` — macro de logging condicional (zero-cost quando debug desativado)
-//! - `init_debug_logger()` — inicializa o arquivo de log
-//! - `spawn_debug_terminal()` — abre terminal PowerShell com tail do log
+//! - `init_debug_logger(is_child: bool)` — inicializa ou anexa ao arquivo de log centralizado
+//! - `spawn_debug_terminal()` — abre um ÚNICO terminal PowerShell com tail do log
 //!
 //! # Segurança
 //! - Nenhum dado sensível (senhas, chaves) é escrito nos logs
-//! - O arquivo de log é truncado a cada inicialização para evitar acúmulo
 
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
@@ -22,7 +21,7 @@ static LOG_FILE: Mutex<Option<File>> = Mutex::new(None);
 /// Retorna o caminho absoluto do arquivo de log debug.
 ///
 /// Localização: `%APPDATA%/ByVitor/RusTTY/debug.log`
-fn log_path() -> PathBuf {
+pub fn log_path() -> PathBuf {
     let mut path = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
     path.push("ByVitor");
     path.push("RusTTY");
@@ -31,39 +30,56 @@ fn log_path() -> PathBuf {
     path
 }
 
-/// Inicializa o logger debug, truncando o arquivo de log anterior.
+/// Inicializa o logger debug.
 ///
-/// Deve ser chamada uma vez no início do programa (`main()`).
-/// Se `debug_mode` estiver desativado, o arquivo não é criado.
-pub fn init_debug_logger() {
+/// Se `is_child` for false (processo principal/gerenciador), cria/trunca o arquivo
+/// e escreve o cabeçalho de inicialização.
+/// Se `is_child` for true (sessão de terminal spawnada), apenas anexa (append) ao
+/// arquivo compartilhado existente sem truncá-lo nem spawnar novas janelas.
+pub fn init_debug_logger(is_child: bool) {
     if !DEBUG_MODE.load(std::sync::atomic::Ordering::Relaxed) {
         return;
     }
 
     let path = log_path();
-    match OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(&path)
-    {
+    let file_result = if is_child {
+        OpenOptions::new()
+            .create(true)
+            .write(true)
+            .append(true)
+            .open(&path)
+    } else {
+        OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&path)
+    };
+
+    match file_result {
         Ok(file) => {
             if let Ok(mut guard) = LOG_FILE.lock() {
                 *guard = Some(file);
             }
-            // Escreve header inicial
-            write_log_entry("INFO", "RusTTY Debug Logger inicializado");
-            write_log_entry("INFO", &format!("Log: {}", path.display()));
+            let pid = std::process::id();
+            if !is_child {
+                write_log_entry("INFO", "================================================================================");
+                write_log_entry("INFO", &format!("RusTTY v1.2.0 — Sessão do Gerenciador Iniciada (PID: {})", pid));
+                write_log_entry("INFO", &format!("Arquivo de Log: {}", path.display()));
+                write_log_entry("INFO", "================================================================================");
+            } else {
+                write_log_entry("INFO", &format!(">>> Processo de Terminal Conectado ao Log Central (PID: {}) <<<", pid));
+            }
         }
         Err(e) => {
-            eprintln!("[DEBUG] Falha ao criar arquivo de log: {}", e);
+            eprintln!("[DEBUG] Falha ao abrir arquivo de log: {}", e);
         }
     }
 }
 
 /// Escreve uma entrada formatada no arquivo de log.
 ///
-/// Formato: `[HH:MM:SS.mmm] [LEVEL] mensagem`
+/// Formato: `[HH:MM:SS.mmm] [LEVEL] [PID:xxxx] mensagem`
 ///
 /// Thread-safe via Mutex. Se o lock falhar ou o arquivo não estiver
 /// inicializado, a entrada é silenciosamente descartada.
@@ -77,14 +93,14 @@ pub fn write_log_entry(level: &str, message: &str) {
         .unwrap_or_default();
     let total_secs = now.as_secs();
     let millis = now.subsec_millis();
-    // Horário local aproximado (UTC offset não é crítico para debug)
     let hours = (total_secs / 3600) % 24;
     let mins = (total_secs / 60) % 60;
     let secs = total_secs % 60;
+    let pid = std::process::id();
 
     let entry = format!(
-        "[{:02}:{:02}:{:02}.{:03}] [{}] {}\n",
-        hours, mins, secs, millis, level, message
+        "[{:02}:{:02}:{:02}.{:03}] [{:<5}] [PID:{}] {}\n",
+        hours, mins, secs, millis, level, pid, message
     );
 
     if let Ok(mut guard) = LOG_FILE.lock() {
@@ -97,9 +113,9 @@ pub fn write_log_entry(level: &str, message: &str) {
 
 /// Abre um terminal PowerShell que faz tail do arquivo de log em tempo real.
 ///
-/// O terminal é um processo independente (`cmd.exe` → `powershell`) que
-/// sobrevive ao ciclo de vida do RusTTY. Fecha automaticamente quando
-/// o usuário fecha a janela do terminal de debug.
+/// Garante que NUNCA seja aberto mais de um terminal de diagnóstico ao mesmo tempo.
+/// Se uma janela com o título 'RusTTY Debug Log' já existir, a nova instância fecha
+/// imediatamente.
 pub fn spawn_debug_terminal() {
     if !DEBUG_MODE.load(std::sync::atomic::Ordering::Relaxed) {
         return;
@@ -108,9 +124,19 @@ pub fn spawn_debug_terminal() {
     let path = log_path();
     let path_str = path.to_string_lossy().to_string();
 
-    // Usa cmd.exe para abrir PowerShell com Get-Content -Wait (equivalente a tail -f)
     let ps_command = format!(
-        "Get-Content -Path '{}' -Wait -Tail 50",
+        "$isNew = $false; \
+         $mutex = New-Object System.Threading.Mutex($true, 'Global\\RusTTY_Debug_Terminal_Mutex', [ref]$isNew); \
+         if (-not $isNew -and -not $mutex.WaitOne(200, $false)) {{ exit }}; \
+         $title = 'RusTTY Debug Log'; \
+         $existing = Get-Process powershell, pwsh -ErrorAction SilentlyContinue | Where-Object {{ $_.MainWindowTitle -like '*RusTTY Debug Log*' -and $_.Id -ne $PID }}; \
+         if ($existing) {{ exit }}; \
+         $host.ui.RawUI.WindowTitle = $title; \
+         Clear-Host; \
+         Write-Host '========================================================================' -ForegroundColor DarkYellow; \
+         Write-Host '                 RusTTY v1.2.0 — Console de Diagnóstico                 ' -ForegroundColor Yellow; \
+         Write-Host '========================================================================' -ForegroundColor DarkYellow; \
+         Get-Content -Path '{}' -Wait -Tail 100",
         path_str
     );
 
@@ -134,10 +160,6 @@ pub fn spawn_debug_terminal() {
 /// debug_log!("INFO", "Conectando a {}:{}", host, port);
 /// debug_log!("ERROR", "Falha de autenticação: {}", err);
 /// ```
-///
-/// # Performance
-/// Quando `DEBUG_MODE` está desativado, a macro verifica o `AtomicBool`
-/// (operação ~1ns) e retorna imediatamente sem formatação de string.
 #[macro_export]
 macro_rules! debug_log {
     ($level:expr, $($arg:tt)*) => {

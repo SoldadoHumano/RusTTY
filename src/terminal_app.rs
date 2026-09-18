@@ -25,6 +25,8 @@ use iced::{
 use iced::keyboard::{self, key::Named, Modifiers};
 use iced::mouse;
 use iced::alignment::{Horizontal, Vertical};
+use iced::advanced::text::{Paragraph as _, Text};
+use iced::advanced::graphics::text::Paragraph;
 
 use std::str::FromStr;
 use std::sync::Arc;
@@ -37,23 +39,48 @@ use crate::config::{
 use crate::net::{NetworkCommand, NetworkEvent, SshAuth};
 use crate::net::ssh::start_ssh_session;
 use crate::terminal::{TerminalState, CellColor};
-use crate::ui::icons::{icon, icon_sized, LucideIcon};
+use crate::ui::icons::{icon_sized, LucideIcon};
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
-/// Fonte monospace do terminal (Consolas já presente no Windows).
-const MONOSPACE: Font = Font::with_name("Consolas");
+/// Fonte monospace oficial do terminal (garantida cross-platform pelo Iced).
+pub const TERMINAL_FONT: Font = Font::MONOSPACE;
 /// Tamanho de janela padrão para cálculo inicial do PTY.
 const DEFAULT_WIN_W: f32 = 900.0;
 const DEFAULT_WIN_H: f32 = 400.0;
 
-// Design tokens do header
-const HEADER_BG: Color = Color::from_rgb(0.10, 0.10, 0.10);
-const PRIMARY:   Color = Color::from_rgb(1.0, 0.45, 0.0);
-const SUCCESS:   Color = Color::from_rgb(0.2, 0.85, 0.5);
-const ERROR_C:   Color = Color::from_rgb(0.95, 0.3, 0.3);
-const MUTED:     Color = Color::from_rgb(0.5, 0.5, 0.5);
-const TEXT_C:    Color = Color::from_rgb(0.9, 0.9, 0.9);
+/// Mede com precisão subpixel os avanços e dimensões exatas da célula de fonte monospace no Iced.
+pub fn measure_cell_metrics(font_size: f32) -> (f32, f32) {
+    let sample = "MMMMMMMMMM0123456789"; // 20 caracteres representativos
+    let text = Text {
+        content: sample,
+        bounds: Size::INFINITY,
+        size: Pixels(font_size),
+        line_height: iced::advanced::text::LineHeight::Relative(1.0),
+        font: TERMINAL_FONT,
+        horizontal_alignment: Horizontal::Left,
+        vertical_alignment: Vertical::Top,
+        shaping: iced::advanced::text::Shaping::Basic,
+    };
+    let paragraph = Paragraph::with_text(text);
+    let cell_w = paragraph.min_width() / 20.0;
+    let cell_h = (font_size / 14.0) * 19.0;
+    (cell_w, cell_h)
+}
+static ASCII_STRS: std::sync::OnceLock<[String; 128]> = std::sync::OnceLock::new();
+
+#[inline]
+pub fn get_char_str(c: char) -> String {
+    let u = c as usize;
+    if u < 128 {
+        let table = ASCII_STRS.get_or_init(|| {
+            std::array::from_fn(|i| (i as u8 as char).to_string())
+        });
+        table[u].clone()
+    } else {
+        c.to_string()
+    }
+}
 
 // ─── Estado da Sessão ─────────────────────────────────────────────────────────
 
@@ -93,15 +120,16 @@ pub struct TerminalApp {
     pub palette_lines_input: String,
 
     pub client_config: crate::config::client::ClientConfig,
+    pub modifiers: Modifiers,
+    pub cell_w: f32,
+    pub cell_h: f32,
 }
 
 impl TerminalApp {
     #[inline]
-    pub fn font_size(&self) -> f32 { self.client_config.terminal_font_size as f32 }
+    pub fn cell_w(&self) -> f32 { self.cell_w }
     #[inline]
-    pub fn cell_w(&self) -> f32 { self.font_size() * 0.6 }
-    #[inline]
-    pub fn cell_h(&self) -> f32 { (self.font_size() / 14.0) * 19.0 }
+    pub fn cell_h(&self) -> f32 { self.cell_h }
 }
 
 // ─── Mensagens ────────────────────────────────────────────────────────────────
@@ -110,6 +138,7 @@ impl TerminalApp {
 pub enum TerminalMessage {
     SshEvent(NetworkEvent),
     IcedEvent(iced::Event),
+    SendBytes(Vec<u8>),
     /// Canvas inicia seleção
     SelectionStart(usize, usize),
     /// Inicia a seleção já com o arraste (start_r, start_c, curr_r, curr_c)
@@ -177,6 +206,9 @@ impl Application for TerminalApp {
         let scroll_lines = client_config.scroll_lines;
         let command_palette_key = client_config.command_palette_key;
 
+        let font_size = client_config.terminal_font_size as f32;
+        let (cell_w, cell_h) = measure_cell_metrics(font_size);
+
         // ── 2. Localiza o perfil do host ou usa Quick Connect ────────────────
         let (host_name_display, host) = match flags {
             TerminalInit::SavedHost(name) => {
@@ -231,6 +263,7 @@ impl Application for TerminalApp {
         let host = match host {
             Some(h) => h,
             None => {
+                crate::debug_log!("ERROR", "TerminalApp: Host '{}' não encontrado na configuração", host_name_display);
                 let mut term = TerminalState::new(24, 80, max_scrollback);
                 term.process_bytes(
                     format!("ERRO: Host \"{}\" não encontrado na configuração.\r\n", host_name_display)
@@ -252,6 +285,9 @@ impl Application for TerminalApp {
                         palette_open: false,
                         palette_lines_input: String::new(),
                         client_config: client_config.clone(),
+                        modifiers: Modifiers::default(),
+                        cell_w,
+                        cell_h,
                     },
                     Command::none(),
                 );
@@ -284,6 +320,9 @@ impl Application for TerminalApp {
                                 palette_open: false,
                                 palette_lines_input: String::new(),
                                 client_config: client_config.clone(),
+                                modifiers: Modifiers::default(),
+                                cell_w,
+                                cell_h,
                             },
                             Command::none(),
                         );
@@ -321,9 +360,6 @@ impl Application for TerminalApp {
         let host_name = host_name_display;
 
         // ── 4. Calcula tamanho inicial do PTY a partir do tamanho da janela ───
-        let font_size = client_config.terminal_font_size as f32;
-        let cell_w = font_size * 0.6;
-        let cell_h = (font_size / 14.0) * 19.0;
         let canvas_h  = DEFAULT_WIN_H;
         let init_cols = (DEFAULT_WIN_W / cell_w).floor() as usize;
         let init_rows = (canvas_h / cell_h).floor() as usize;
@@ -338,6 +374,17 @@ impl Application for TerminalApp {
         // ── 6. Inicializa grid com o tamanho do PTY ───────────────────────────
         let mut terminal = TerminalState::new(init_rows.max(1), init_cols.max(1), max_scrollback);
         terminal.process_bytes(b"Conectando...\r\n");
+
+        crate::debug_log!(
+            "INFO",
+            "TerminalApp: Sessão inicializada para '{}' ({}:{}, usuário: '{}', bridge: {}, legacy: {})",
+            host.name, host.address, host.port, host.username, host.bridge_id.is_some(), host.legacy_ssh
+        );
+        crate::debug_log!(
+            "DEBUG",
+            "TerminalApp: Geometria do PTY calculada: {} cols x {} rows (célula: {:.2}x{:.2}px, font: {}px)",
+            pty_cols, pty_rows, cell_w, cell_h, font_size
+        );
 
         // ── 7. Spawna a task SSH ──────────────────────────────────────────────
         let host_addr = host.address.clone();
@@ -373,6 +420,9 @@ impl Application for TerminalApp {
             palette_open: false,
             palette_lines_input: String::new(),
             client_config,
+            modifiers: Modifiers::default(),
+            cell_w,
+            cell_h,
         };
 
         (app, spawn_cmd)
@@ -419,7 +469,8 @@ impl Application for TerminalApp {
             // ── Eventos SSH ──────────────────────────────────────────────────
             TerminalMessage::SshEvent(event) => {
                 match event {
-                    NetworkEvent::Connected(_msg) => {
+                    NetworkEvent::Connected(msg) => {
+                        crate::debug_log!("INFO", "TerminalApp: SSH conectado com sucesso: {}", msg);
                         self.status = TerminalStatus::Connected;
                         self.terminal.reset();
                     }
@@ -428,11 +479,13 @@ impl Application for TerminalApp {
                         self.scroll_offset = 0;
                     }
                     NetworkEvent::Disconnected(msg) => {
+                        crate::debug_log!("WARN", "TerminalApp: SSH desconectado: {}", msg);
                         self.status = TerminalStatus::Disconnected(msg.clone());
                         let note = format!("\r\n\r\n── {} ──\r\n", msg);
                         self.terminal.process_bytes(note.as_bytes());
                     }
                     NetworkEvent::Error(msg) => {
+                        crate::debug_log!("ERROR", "TerminalApp: Erro de SSH: {}", msg);
                         self.status = TerminalStatus::Error(msg.clone());
                         let err = format!("\r\n\x1b[31mERRO: {}\x1b[0m\r\n", msg);
                         self.terminal.process_bytes(err.as_bytes());
@@ -442,8 +495,16 @@ impl Application for TerminalApp {
 
             // ── Eventos de Teclado ───────────────────────────────────────────
             TerminalMessage::IcedEvent(iced::Event::Keyboard(kb_event)) => {
+                if let keyboard::Event::ModifiersChanged(m) = kb_event {
+                    self.modifiers = m;
+                    return Command::none();
+                }
                 self.scroll_offset = 0;
                 return self.handle_keyboard(kb_event);
+            }
+
+            TerminalMessage::SendBytes(bytes) => {
+                return self.send_bytes(bytes);
             }
 
             // ── Resize da Janela ─────────────────────────────────────────────
@@ -462,6 +523,11 @@ impl Application for TerminalApp {
                 }
 
                 if new_cols != self.terminal.grid.cols || new_rows != self.terminal.grid.rows {
+                    crate::debug_log!(
+                        "DEBUG",
+                        "TerminalApp: Janela redimensionada ({}x{}) -> PTY {}x{} -> {}x{}",
+                        width, height, self.terminal.grid.cols, self.terminal.grid.rows, new_cols, new_rows
+                    );
                     self.terminal.resize(new_rows, new_cols);
                     if let Some(tx) = self.cmd_sender.clone() {
                         return Command::perform(
@@ -562,9 +628,23 @@ impl Application for TerminalApp {
 
             // ── Paste do Clipboard ───────────────────────────────────────────
             TerminalMessage::ClipboardContent(Some(text)) => {
-
+                crate::debug_log!(
+                    "DEBUG",
+                    "TerminalApp: Colando {} caracteres do clipboard (bracketed_paste: {})",
+                    text.len(), self.terminal.grid.bracketed_paste
+                );
                 if let Some(tx) = self.cmd_sender.clone() {
-                    let bytes = text.into_bytes();
+                    // Normaliza quebras de linha: Windows clipboard usa \r\n, Unix usa \n.
+                    // Para executar comandos corretamente em sequência, substitui \r\n por \r e \n por \r.
+                    let normalized = text.replace("\r\n", "\r").replace('\n', "\r");
+                    let mut bytes = Vec::new();
+                    if self.terminal.grid.bracketed_paste {
+                        bytes.extend_from_slice(b"\x1b[200~");
+                        bytes.extend_from_slice(normalized.as_bytes());
+                        bytes.extend_from_slice(b"\x1b[201~");
+                    } else {
+                        bytes.extend_from_slice(normalized.as_bytes());
+                    }
                     return Command::perform(
                         async move { tx.send(NetworkCommand::SendData(bytes)).await.ok(); },
                         |_| TerminalMessage::Noop,
@@ -573,6 +653,7 @@ impl Application for TerminalApp {
             }
 
             TerminalMessage::Disconnect => {
+                crate::debug_log!("INFO", "TerminalApp: Desconexão solicitada pelo usuário");
                 if let Some(tx) = self.cmd_sender.clone() {
                     return Command::perform(
                         async move { tx.send(NetworkCommand::Disconnect).await.ok(); },
@@ -581,6 +662,7 @@ impl Application for TerminalApp {
                 }
             }
             TerminalMessage::WindowCloseRequested(id) => {
+                crate::debug_log!("INFO", "TerminalApp: Fechamento de janela solicitado (id: {:?})", id);
                 if let Some(tx) = self.cmd_sender.clone() {
                     return Command::perform(
                         async move {
@@ -600,6 +682,17 @@ impl Application for TerminalApp {
                 self.cursor_visible = !self.cursor_visible;
             }
             TerminalMessage::ScrollWheel(dy) => {
+                if self.terminal.grid.is_alt_screen {
+                    // Em tela cheia alternativa (ex: vim, less, htop), a rolagem do mouse envia setas cima/baixo
+                    let count = (dy.abs() as usize).max(1);
+                    let seq = if dy > 0.0 { b"\x1b[A" } else { b"\x1b[B" };
+                    let mut bytes = Vec::new();
+                    for _ in 0..count {
+                        bytes.extend_from_slice(seq);
+                    }
+                    return self.send_bytes(bytes);
+                }
+
                 let max_offset = self.terminal.grid.scrollback.len();
                 let jump = (dy.abs() as usize).max(1) * self.scroll_lines;
                 
@@ -663,12 +756,15 @@ impl Application for TerminalApp {
 
     fn view(&self) -> Element<'_, TerminalMessage> {
         let terminal_canvas = Canvas::new(TerminalCanvas {
-            grid:       &self.terminal.grid,
-            sel_anchor: self.sel_anchor,
-            sel_cursor: self.sel_cursor,
+            grid:           &self.terminal.grid,
+            sel_anchor:     self.sel_anchor,
+            sel_cursor:     self.sel_cursor,
             cursor_visible: self.cursor_visible,
-            scroll_offset: self.scroll_offset,
-            client_config: &self.client_config,
+            scroll_offset:  self.scroll_offset,
+            client_config:  &self.client_config,
+            modifiers:      self.modifiers,
+            cell_w:         self.cell_w,
+            cell_h:         self.cell_h,
         })
         .width(Length::Fill)
         .height(Length::Fill);
@@ -758,25 +854,33 @@ impl TerminalApp {
             }
         }
 
-        // ── Atalhos de Clipboard (intercepta antes de qualquer envio SSH) ─────
-        if modifiers.control() && modifiers.shift() {
+        // ── Atalhos de Clipboard (Ctrl+C e Ctrl+V, além de Ctrl+Shift+C / Ctrl+Shift+V) ───
+        if modifiers.control() {
             if let keyboard::Key::Character(ref c) = key {
-                match c.as_str().to_lowercase().as_str() {
-                    "c" => {
-                        // Ctrl+Shift+C → copia seleção
-                        if let (Some(a), Some(b)) = (self.sel_anchor, self.sel_cursor) {
-                            let selected = self.terminal.grid.selected_text(a, b);
-                            if !selected.is_empty() {
-                                return iced::clipboard::write(selected);
-                            }
+                let key_str = c.as_str().to_lowercase();
+                if key_str == "c" {
+                    // Se há seleção ativa, Ctrl+C copia para o clipboard e NÃO envia SIGINT (\x03)
+                    let has_selection = if let (Some(a), Some(b)) = (self.sel_anchor, self.sel_cursor) {
+                        a != b
+                    } else {
+                        false
+                    };
+                    if has_selection {
+                        let selected = self.terminal.grid.selected_text(self.sel_anchor.unwrap(), self.sel_cursor.unwrap());
+                        self.sel_anchor = None;
+                        self.sel_cursor = None;
+                        if !selected.is_empty() {
+                            return iced::clipboard::write(selected);
                         }
-                        return Command::none(); // Não envia para SSH
+                        return Command::none();
+                    } else if modifiers.shift() {
+                        // Ctrl+Shift+C sem seleção ativa: não envia nada
+                        return Command::none();
                     }
-                    "v" => {
-                        // Ctrl+Shift+V → paste do clipboard
-                        return iced::clipboard::read(TerminalMessage::ClipboardContent);
-                    }
-                    _ => {}
+                    // Ctrl+C sem seleção ativa e sem Shift: deixa cair para enviar \x03 (SIGINT)
+                } else if key_str == "v" {
+                    // Ctrl+V ou Ctrl+Shift+V cola do clipboard
+                    return iced::clipboard::read(TerminalMessage::ClipboardContent);
                 }
             }
         }
@@ -880,12 +984,15 @@ impl TerminalApp {
 
 /// Programa de Canvas que renderiza a grade VTE do terminal.
 struct TerminalCanvas<'a> {
-    grid:       &'a crate::terminal::TerminalGrid,
-    sel_anchor: Option<(usize, usize)>,
-    sel_cursor: Option<(usize, usize)>,
+    grid:           &'a crate::terminal::TerminalGrid,
+    sel_anchor:     Option<(usize, usize)>,
+    sel_cursor:     Option<(usize, usize)>,
     cursor_visible: bool,
-    scroll_offset: usize,
-    client_config: &'a crate::config::client::ClientConfig,
+    scroll_offset:  usize,
+    client_config:  &'a crate::config::client::ClientConfig,
+    modifiers:      Modifiers,
+    cell_w:         f32,
+    cell_h:         f32,
 }
 
 /// Estado de drag do canvas (gerenciado pelo widget, persiste entre frames).
@@ -902,9 +1009,9 @@ impl<'a> TerminalCanvas<'a> {
     #[inline]
     pub fn font_size(&self) -> f32 { self.client_config.terminal_font_size as f32 }
     #[inline]
-    pub fn cell_w(&self) -> f32 { self.font_size() * 0.6 }
+    pub fn cell_w(&self) -> f32 { self.cell_w }
     #[inline]
-    pub fn cell_h(&self) -> f32 { (self.font_size() / 14.0) * 19.0 }
+    pub fn cell_h(&self) -> f32 { self.cell_h }
 }
 
 impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
@@ -922,12 +1029,84 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
         use mouse::Button;
         use canvas::event::Status;
 
+        // Se a aplicação remota ativou mouse tracking (ex: htop, vim) e o usuário NÃO está segurando Shift:
+        let in_mouse_mode = self.grid.mouse_mode != crate::terminal::MouseMode::None && !self.modifiers.shift();
+
+        if in_mouse_mode {
+            match event {
+                CE::Mouse(ME::ButtonPressed(btn)) => {
+                    if let Some(pos) = cursor.position_in(bounds) {
+                        let col = ((pos.x / self.cell_w()) as usize).min(self.grid.cols.saturating_sub(1));
+                        let row = ((pos.y / self.cell_h()) as usize).min(self.grid.rows.saturating_sub(1));
+                        let code = match btn {
+                            Button::Left => 0,
+                            Button::Middle => 1,
+                            Button::Right => 2,
+                            _ => 0,
+                        };
+                        state.dragging = true;
+                        let bytes = format!("\x1b[<{};{};{}M", code, col + 1, row + 1).into_bytes();
+                        return (Status::Captured, Some(TerminalMessage::SendBytes(bytes)));
+                    }
+                }
+                CE::Mouse(ME::ButtonReleased(btn)) => {
+                    state.dragging = false;
+                    if let Some(pos) = cursor.position_in(bounds) {
+                        let col = ((pos.x / self.cell_w()) as usize).min(self.grid.cols.saturating_sub(1));
+                        let row = ((pos.y / self.cell_h()) as usize).min(self.grid.rows.saturating_sub(1));
+                        let code = match btn {
+                            Button::Left => 0,
+                            Button::Middle => 1,
+                            Button::Right => 2,
+                            _ => 0,
+                        };
+                        let bytes = format!("\x1b[<{};{};{}m", code, col + 1, row + 1).into_bytes();
+                        return (Status::Captured, Some(TerminalMessage::SendBytes(bytes)));
+                    }
+                }
+                CE::Mouse(ME::CursorMoved { .. }) => {
+                    if self.grid.mouse_mode == crate::terminal::MouseMode::AnyEvent
+                        || (self.grid.mouse_mode == crate::terminal::MouseMode::ButtonEvent && state.dragging)
+                    {
+                        if let Some(pos) = cursor.position_in(bounds) {
+                            let col = ((pos.x / self.cell_w()) as usize).min(self.grid.cols.saturating_sub(1));
+                            let row = ((pos.y / self.cell_h()) as usize).min(self.grid.rows.saturating_sub(1));
+                            let code = if state.dragging { 32 } else { 35 };
+                            let bytes = format!("\x1b[<{};{};{}M", code, col + 1, row + 1).into_bytes();
+                            return (Status::Captured, Some(TerminalMessage::SendBytes(bytes)));
+                        }
+                    }
+                }
+                CE::Mouse(ME::WheelScrolled { delta }) => {
+                    if let Some(pos) = cursor.position_in(bounds) {
+                        let col = ((pos.x / self.cell_w()) as usize).min(self.grid.cols.saturating_sub(1));
+                        let row = ((pos.y / self.cell_h()) as usize).min(self.grid.rows.saturating_sub(1));
+                        let dy = match delta {
+                            mouse::ScrollDelta::Lines { y, .. } => y,
+                            mouse::ScrollDelta::Pixels { y, .. } => y,
+                        };
+                        let code = if dy > 0.0 { 64 } else { 65 };
+                        let bytes = format!("\x1b[<{};{};{}M", code, col + 1, row + 1).into_bytes();
+                        return (Status::Captured, Some(TerminalMessage::SendBytes(bytes)));
+                    }
+                }
+                _ => {}
+            }
+            return (Status::Ignored, None);
+        }
+
+        // Modo terminal normal: seleção de texto e scroll
+        let abs_top = if self.grid.is_alt_screen {
+            0
+        } else {
+            self.grid.scrollback.len().saturating_sub(self.scroll_offset)
+        };
+
         match event {
             CE::Mouse(ME::ButtonPressed(Button::Left)) => {
                 if let Some(pos) = cursor.position_in(bounds) {
                     let col = ((pos.x / self.cell_w()) as usize).min(self.grid.cols.saturating_sub(1));
                     let row = ((pos.y / self.cell_h()) as usize).min(self.grid.rows.saturating_sub(1));
-                    let abs_top = self.grid.scrollback.len().saturating_sub(self.scroll_offset);
                     let abs_row = abs_top + row;
                     state.dragging = true;
                     state.has_dragged = false;
@@ -963,7 +1142,6 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
                 if let Some(pos) = cursor.position_in(bounds) {
                     let col = ((pos.x / self.cell_w()) as usize).min(self.grid.cols.saturating_sub(1));
                     let row = ((pos.y / self.cell_h()) as usize).min(self.grid.rows.saturating_sub(1));
-                    let abs_top = self.grid.scrollback.len().saturating_sub(self.scroll_offset);
                     let abs_row = abs_top + row;
                     
                     if is_first_drag && state.click_count == 1 {
@@ -980,14 +1158,17 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
                 if let (Some(pos), Some(start_pos)) = (cursor.position_in(bounds), state.start_pos) {
                     let col = ((pos.x / self.cell_w()) as usize).min(self.grid.cols.saturating_sub(1));
                     let row = ((pos.y / self.cell_h()) as usize).min(self.grid.rows.saturating_sub(1));
-                    let abs_top = self.grid.scrollback.len().saturating_sub(self.scroll_offset);
                     let abs_row = abs_top + row;
                     
                     if (abs_row, col) == start_pos {
                         // Clique simples (sem drag)
                         // Só move o cursor se for um clique único na linha atual.
                         if state.click_count <= 1 {
-                            let cursor_abs_row = self.grid.scrollback.len() + self.grid.cursor_row;
+                            let cursor_abs_row = if self.grid.is_alt_screen {
+                                self.grid.cursor_row
+                            } else {
+                                self.grid.scrollback.len() + self.grid.cursor_row
+                            };
                             if abs_row == cursor_abs_row && !state.has_dragged {
                                 let diff = col as isize - self.grid.cursor_col as isize;
                                 return (Status::Captured, Some(TerminalMessage::MoveCursorLeftRight(diff)));
@@ -1037,12 +1218,21 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
         let grid    = self.grid;
         let has_sel = self.sel_anchor.is_some() && self.sel_cursor.is_some();
 
-        let abs_top = grid.scrollback.len().saturating_sub(self.scroll_offset);
+        let abs_top = if grid.is_alt_screen {
+            0
+        } else {
+            grid.scrollback.len().saturating_sub(self.scroll_offset)
+        };
 
         // ── Renderiza células ────────────────────────────────────────────────
         for row in 0..grid.rows {
             let abs_row = abs_top + row;
-            let from_scrollback = abs_row < grid.scrollback.len();
+            let from_scrollback = !grid.is_alt_screen && abs_row < grid.scrollback.len();
+            let grid_row = if grid.is_alt_screen {
+                row
+            } else {
+                abs_row.saturating_sub(grid.scrollback.len())
+            };
 
             // Computa cores customizadas da linha atual (Highlighting)
             let mut custom_colors = vec![None; grid.cols];
@@ -1052,7 +1242,7 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
                     let cell = if from_scrollback {
                         &grid.scrollback[abs_row][col]
                     } else {
-                        &grid.cells[abs_row - grid.scrollback.len()][col]
+                        &grid.cells[grid_row][col]
                     };
                     row_str.push(cell.ch);
                 }
@@ -1114,20 +1304,18 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
                 }
             }
 
-            let mut text_segment = String::new();
-            let mut current_fg: Option<Color> = None;
-            let mut segment_start_x = 0.0;
-            let y = row as f32 * self.cell_h();
+            let cw = self.cell_w;
+            let ch = self.cell_h;
+            let y = row as f32 * ch;
 
             for col in 0..grid.cols {
                 let cell = if from_scrollback {
                     &grid.scrollback[abs_row][col]
                 } else {
-                    let grid_row = abs_row - grid.scrollback.len();
                     &grid.cells[grid_row][col]
                 };
 
-                let x = col as f32 * self.cell_w();
+                let x = col as f32 * cw;
 
                 let in_sel = has_sel && grid.in_selection(
                     abs_row, col,
@@ -1142,62 +1330,41 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
                 if in_sel {
                     frame.fill_rectangle(
                         Point::new(x, y),
-                        Size::new(self.cell_w(), self.cell_h()),
+                        Size::new(cw, ch),
                         Color::from_rgba(0.25, 0.45, 0.85, 0.6),
                     );
                 } else if eff_bg != CellColor::DEFAULT_BG {
                     frame.fill_rectangle(
                         Point::new(x, y),
-                        Size::new(self.cell_w(), self.cell_h()),
+                        Size::new(cw, ch),
                         cell_color_to_iced(eff_bg),
                     );
                 }
 
-                let mut fg_color = if in_sel {
-                    Color::WHITE
-                } else {
-                    cell_color_to_iced(eff_fg)
-                };
+                // Caractere da célula: renderizado diretamente na sua posição geométrica exata
+                if cell.ch != ' ' && cell.ch != '\0' {
+                    let mut fg_color = if in_sel {
+                        Color::WHITE
+                    } else {
+                        cell_color_to_iced(eff_fg)
+                    };
 
-                if let Some(c) = custom_colors[col] {
-                    if !in_sel { fg_color = c; }
-                }
-
-                if current_fg == Some(fg_color) {
-                    text_segment.push(cell.ch);
-                } else {
-                    if !text_segment.trim().is_empty() {
-                        frame.fill_text(canvas::Text {
-                            content:              text_segment.clone(),
-                            position:             Point::new(segment_start_x, y),
-                            color:                current_fg.unwrap(),
-                            size:                 Pixels(self.font_size()),
-                            font:                 MONOSPACE,
-                            horizontal_alignment: Horizontal::Left,
-                            vertical_alignment:   Vertical::Top,
-                            line_height:          iced::widget::text::LineHeight::Absolute(Pixels(self.cell_h())),
-                            shaping:              iced::widget::text::Shaping::Basic,
-                        });
+                    if let Some(c) = custom_colors[col] {
+                        if !in_sel { fg_color = c; }
                     }
-                    text_segment.clear();
-                    current_fg = Some(fg_color);
-                    segment_start_x = x;
-                    text_segment.push(cell.ch);
-                }
-            }
 
-            if !text_segment.trim().is_empty() {
-                frame.fill_text(canvas::Text {
-                    content:              text_segment,
-                    position:             Point::new(segment_start_x, y),
-                    color:                current_fg.unwrap(),
-                    size:                 Pixels(self.font_size()),
-                    font:                 MONOSPACE,
-                    horizontal_alignment: Horizontal::Left,
-                    vertical_alignment:   Vertical::Top,
-                    line_height:          iced::widget::text::LineHeight::Absolute(Pixels(self.cell_h())),
-                    shaping:              iced::widget::text::Shaping::Basic,
-                });
+                    frame.fill_text(canvas::Text {
+                        content:              get_char_str(cell.ch),
+                        position:             Point::new(x, y),
+                        color:                fg_color,
+                        size:                 Pixels(self.font_size()),
+                        font:                 TERMINAL_FONT,
+                        horizontal_alignment: Horizontal::Left,
+                        vertical_alignment:   Vertical::Top,
+                        line_height:          iced::widget::text::LineHeight::Absolute(Pixels(ch)),
+                        shaping:              iced::widget::text::Shaping::Basic,
+                    });
+                }
             }
         }
 
@@ -1205,29 +1372,29 @@ impl<'a> canvas::Program<TerminalMessage> for TerminalCanvas<'a> {
         let cr = grid.cursor_row;
         let cc = grid.cursor_col;
         
-        let screen_row = cr + self.scroll_offset;
+        let screen_row = if grid.is_alt_screen { cr } else { cr + self.scroll_offset };
         
-        if self.cursor_visible && screen_row < grid.rows && cc < grid.cols {
-            let cx = cc as f32 * self.cell_w();
-            let cy = screen_row as f32 * self.cell_h();
+        if self.cursor_visible && grid.cursor_visible && screen_row < grid.rows && cc < grid.cols {
+            let cx = cc as f32 * self.cell_w;
+            let cy = screen_row as f32 * self.cell_h;
             // Cursor como bloco branco sólido
             frame.fill_rectangle(
                 Point::new(cx, cy),
-                Size::new(self.cell_w(), self.cell_h()),
+                Size::new(self.cell_w, self.cell_h),
                 Color::from_rgba(1.0, 1.0, 1.0, 0.85),
             );
             // Caractere do cursor em cor invertida
             let cur_cell = &grid.cells[cr][cc];
-            if cur_cell.ch != ' ' {
+            if cur_cell.ch != ' ' && cur_cell.ch != '\0' {
                 frame.fill_text(canvas::Text {
-                    content:              cur_cell.ch.to_string(),
+                    content:              get_char_str(cur_cell.ch),
                     position:             Point::new(cx, cy),
                     color:                cell_color_to_iced(CellColor::DEFAULT_BG),
                     size:                 Pixels(self.font_size()),
-                    font:                 MONOSPACE,
+                    font:                 TERMINAL_FONT,
                     horizontal_alignment: Horizontal::Left,
                     vertical_alignment:   Vertical::Top,
-                    line_height:          iced::widget::text::LineHeight::Absolute(Pixels(self.cell_h())),
+                    line_height:          iced::widget::text::LineHeight::Absolute(Pixels(self.cell_h)),
                     shaping:              iced::widget::text::Shaping::Basic,
                 });
             }
@@ -1297,7 +1464,7 @@ fn apply_ip_highlight(
 
 /// Inicia o `TerminalApp` como aplicação Iced independente.
 pub fn run_terminal(init: TerminalInit) -> iced::Result {
-    let title = match &init {
+    let _title = match &init {
         TerminalInit::SavedHost(name) => name.clone(),
         TerminalInit::Bridge(id) => format!("Bridge: {}", id),
         TerminalInit::QuickSsh { address, .. } => address.clone(),

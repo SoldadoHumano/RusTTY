@@ -310,6 +310,7 @@ pub async fn start_ssh_session(
                             .await;
                     }
                     Some(ChannelMsg::ExitStatus { exit_status }) => {
+                        crate::debug_log!("INFO", "SSH: Processo remoto finalizado com exit status {}", exit_status);
                         let _ = ui_sender
                             .send(NetworkEvent::Disconnected(format!(
                                 "SSH: Processo encerrado com código {}",
@@ -319,6 +320,7 @@ pub async fn start_ssh_session(
                         break;
                     }
                     Some(ChannelMsg::Eof) => {
+                        crate::debug_log!("INFO", "SSH: Servidor remoto encerrou a sessão (EOF)");
                         let _ = ui_sender
                             .send(NetworkEvent::Disconnected(
                                 "SSH: Servidor encerrou a conexão (EOF).".into(),
@@ -328,6 +330,7 @@ pub async fn start_ssh_session(
                     }
                     None => {
                         // Canal fechado inesperadamente
+                        crate::debug_log!("WARN", "SSH: Canal SSH fechado");
                         let _ = ui_sender
                             .send(NetworkEvent::Disconnected(
                                 "SSH: Canal fechado.".into(),
@@ -344,6 +347,7 @@ pub async fn start_ssh_session(
                 match cmd {
                     Some(NetworkCommand::SendData(data)) => {
                         if let Err(e) = channel.data(data.as_ref()).await {
+                            crate::debug_log!("ERROR", "SSH: Falha ao enviar dados pelo canal: {}", e);
                             let _ = ui_sender
                                 .send(NetworkEvent::Error(format!(
                                     "Falha ao enviar dados: {}",
@@ -355,11 +359,13 @@ pub async fn start_ssh_session(
                     }
                     Some(NetworkCommand::ResizePty { cols, rows }) => {
                         // Resize do terminal quando o usuário redimensiona a janela
+                        crate::debug_log!("DEBUG", "SSH: Redimensionando PTY remoto para {} cols x {} rows", cols, rows);
                         let _ = channel
                             .window_change(cols as u32, rows as u32, 0, 0)
                             .await;
                     }
                     Some(NetworkCommand::Disconnect) | None => {
+                        crate::debug_log!("INFO", "SSH: Comando de desconexão recebido, enviando EOF");
                         let _ = channel.eof().await;
                         let _ = ui_sender
                             .send(NetworkEvent::Disconnected("SSH: Desconectado.".into()))

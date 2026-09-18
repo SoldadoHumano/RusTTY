@@ -31,19 +31,29 @@ fn main() -> iced::Result {
     // Carrega configurações do cliente para verificar debug_mode antes de qualquer operação
     let _client_cfg = config::client::load_client_config();
 
-    // Inicializa logger debug (no-op se debug_mode == false)
-    debug::init_debug_logger();
-    debug_log!("INFO", "RusTTY iniciando...");
-
-    // Spawna terminal de debug se habilitado
-    debug::spawn_debug_terminal();
-
     let args: Vec<String> = std::env::args().collect();
-    debug_log!("INFO", "Args: {:?}", args);
+    let is_child = std::env::var("RUSTTY_CHILD").is_ok()
+        || args.iter().any(|a| a == "--terminal" || a == "--quick-ssh" || a == "--bridge-terminal");
+
+    // Inicializa logger debug (anexa se for processo filho, trunca se for o gerenciador principal)
+    debug::init_debug_logger(is_child);
+    debug_log!(
+        "INFO",
+        "Processo RusTTY iniciado (PID: {}, role: {}, args: {:?})",
+        std::process::id(),
+        if is_child { "Terminal/SSH Child" } else { "Manager" },
+        args
+    );
+
+    // Spawna terminal de debug APENAS a partir do processo principal/gerenciador
+    if !is_child {
+        debug::spawn_debug_terminal();
+    }
 
     // Detecta modo terminal salvo: `rustty --terminal <host_name>`
     if let Some(pos) = args.iter().position(|a| a == "--terminal") {
         let host_name = args.get(pos + 1).cloned().unwrap_or_default();
+        debug_log!("INFO", "Roteando para Terminal Salvo: host='{}'", host_name);
         return run_terminal(terminal_app::TerminalInit::SavedHost(host_name));
     }
 
@@ -54,6 +64,7 @@ fn main() -> iced::Result {
         let user = args.get(pos + 3).cloned().unwrap_or_default();
         let pass = args.get(pos + 4).cloned().unwrap_or_else(|| "none".to_string());
         
+        debug_log!("INFO", "Roteando para Quick SSH: {}@{}:{}", user, address, port);
         return run_terminal(terminal_app::TerminalInit::QuickSsh {
             address,
             port,
@@ -65,14 +76,17 @@ fn main() -> iced::Result {
     // Detecta modo bridge: `rustty --bridge-terminal <id>`
     if let Some(pos) = args.iter().position(|a| a == "--bridge-terminal") {
         let id_str = args.get(pos + 1).cloned().unwrap_or_default();
+        debug_log!("INFO", "Roteando para Bridge Terminal: id='{}'", id_str);
         return run_terminal(terminal_app::TerminalInit::Bridge(id_str));
     }
 
     // Modo padrão: gerenciador de conexões
     if _client_cfg.experimental_webview_ui {
-        debug_log!("INFO", "Iniciando Webview UI (Experimental)");
+        debug_log!("INFO", "Iniciando Gerenciador RusTTY com interface Webview UI");
         return webview_app::run();
     }
+
+    debug_log!("INFO", "Iniciando Gerenciador RusTTY com interface Iced Nativa");
 
     RusTTYApp::run(Settings {
         // Registra a fonte Lucide para que o renderer possa exibir os ícones.

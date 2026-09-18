@@ -2,6 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 
 pub fn check_and_apply_update() -> Result<bool, String> {
+    crate::debug_log!("INFO", "Verificando atualizações no GitHub (versão atual: v{})...", self_update::cargo_crate_version!());
     let updater = self_update::backends::github::Update::configure()
         .repo_owner("SoldadoHumano")
         .repo_name("RusTTY")
@@ -12,6 +13,7 @@ pub fn check_and_apply_update() -> Result<bool, String> {
         .map_err(|e| e.to_string())?;
 
     let latest_release = updater.get_latest_release().map_err(|e| e.to_string())?;
+    crate::debug_log!("INFO", "Release mais recente encontrada no GitHub: v{}", latest_release.version);
     let is_greater = self_update::version::bump_is_greater(
         updater.current_version().as_str(),
         &latest_release.version,
@@ -19,8 +21,10 @@ pub fn check_and_apply_update() -> Result<bool, String> {
     .map_err(|e| e.to_string())?;
 
     if !is_greater {
+        crate::debug_log!("INFO", "RusTTY já está na versão mais recente (v{})", self_update::cargo_crate_version!());
         return Ok(false);
     }
+    crate::debug_log!("INFO", "Nova versão detectada! Iniciando download da v{}...", latest_release.version);
 
     let asset = latest_release.asset_for("rustty.exe", None)
         .ok_or_else(|| "Asset 'rustty.exe' não encontrado na nova release.".to_string())?;

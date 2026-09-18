@@ -16,6 +16,10 @@ use winit::{
 };
 use wry::{WebView, WebViewBuilder, http::Response};
 use serde_json::{json, Value};
+use futures_util::{SinkExt, StreamExt};
+use tokio::net::TcpListener;
+use tokio::sync::broadcast;
+use tokio_tungstenite::tungstenite::Message as WsMessage;
 
 use crate::config::{
     load_config, save_config, AppConfig, AuthType, ConfigNode, HostProfile,
@@ -50,14 +54,16 @@ struct WebviewState {
     config: AppConfig,
     client_config: ClientConfig,
     active_terminals: HashMap<String, std::process::Child>,
+    ws_tx: broadcast::Sender<String>,
 }
 
 impl WebviewState {
-    fn new() -> Self {
+    fn new(ws_tx: broadcast::Sender<String>) -> Self {
         Self {
             config: load_config(),
             client_config: load_client_config(),
             active_terminals: HashMap::new(),
+            ws_tx,
         }
     }
 
@@ -188,14 +194,42 @@ fn validate_address(address: &str, allow_domain: bool) -> Result<(), String> {
     Ok(())
 }
 
-// ─── Callback helper: envia mensagem do Rust → Frontend ─────────────────────
+// ─── Callback helpers: envia mensagem do Rust → Frontend via WebSocket + Fallback ──
 
 #[allow(dead_code)]
-fn send_to_frontend(webview: &WebView, msg: &Value) {
+fn send_to_frontend(webview: &WebView, ws_tx: &broadcast::Sender<String>, msg: &Value) {
     let json_str = serde_json::to_string(msg).unwrap_or_default();
-    let escaped = json_str.replace('\\', "\\\\").replace('\'', "\\'");
-    let script = format!("window.__rustCallback('{}')", escaped);
-    let _ = webview.evaluate_script(&script);
+    // Se houver clientes WebSocket conectados, envia exclusivamente por ele (tempo real).
+    // Caso contrário (ex: na inicialização antes do WS conectar), utiliza evaluate_script como fallback nativo.
+    if ws_tx.receiver_count() > 0 {
+        let _ = ws_tx.send(json_str);
+    } else {
+        let escaped = json_str
+            .replace('\\', "\\\\")
+            .replace('\'', "\\'")
+            .replace('\n', "\\n")
+            .replace('\r', "\\r");
+        let script = format!("if (window.__rustCallback) window.__rustCallback('{}');", escaped);
+        let _ = webview.evaluate_script(&script);
+    }
+}
+
+#[allow(dead_code)]
+fn send_success(webview: &WebView, ws_tx: &broadcast::Sender<String>, message: &str) {
+    send_to_frontend(webview, ws_tx, &json!({
+        "type": "operation_result",
+        "success": true,
+        "message": message,
+    }));
+}
+
+#[allow(dead_code)]
+fn send_error(webview: &WebView, ws_tx: &broadcast::Sender<String>, error: &str) {
+    send_to_frontend(webview, ws_tx, &json!({
+        "type": "operation_result",
+        "success": false,
+        "error": error,
+    }));
 }
 
 // ─── IPC Message Handler ─────────────────────────────────────────────────────
@@ -207,12 +241,15 @@ fn handle_ipc_message(
     state: &Arc<Mutex<WebviewState>>,
     webview: &WebView,
     proxy: &winit::event_loop::EventLoopProxy<String>,
+    ws_tx: &broadcast::Sender<String>,
 ) {
+    crate::debug_log!("DEBUG", "Webview IPC: Comando recebido: '{}'", msg_type);
     match msg_type {
         // ── Config Data ──────────────────────────────────────────────
         "get_config" => {
+            crate::debug_log!("DEBUG", "Webview IPC: get_config solicitado");
             let st = state.lock().unwrap();
-            send_to_frontend(webview, &json!({
+            send_to_frontend(webview, ws_tx, &json!({
                 "type": "config_data",
                 "hosts": serialize_hosts(&st.config),
                 "bridges": serialize_bridges(&st.config),
@@ -221,7 +258,7 @@ fn handle_ipc_message(
 
         "get_client_config" => {
             let st = state.lock().unwrap();
-            send_to_frontend(webview, &json!({
+            send_to_frontend(webview, ws_tx, &json!({
                 "type": "client_config_data",
                 "data": serialize_client_config(&st.client_config),
                 "doc_pages": serialize_doc_pages(),
@@ -236,7 +273,7 @@ fn handle_ipc_message(
                     .find(|p| p.id == page_id)
                     .map(|p| p.content)
                     .unwrap_or("Página não encontrada.");
-                send_to_frontend(webview, &json!({
+                send_to_frontend(webview, ws_tx, &json!({
                     "type": "doc_page_content",
                     "page_id": page_id,
                     "content": content,
@@ -248,7 +285,7 @@ fn handle_ipc_message(
         "save_host" => {
             let data = match parsed.get("data") {
                 Some(d) => d,
-                None => { send_error(webview, "Dados do host não fornecidos."); return; }
+                None => { send_error(webview, ws_tx, "Dados do host não fornecidos."); return; }
             };
 
             let name = data.get("name").and_then(|v| v.as_str()).unwrap_or_default().trim().to_string();
@@ -263,21 +300,27 @@ fn handle_ipc_message(
             let bridge_id = bridge_id_str.and_then(|s| uuid::Uuid::parse_str(s).ok());
             let edit_index = parsed.get("edit_index").and_then(|v| v.as_u64()).map(|v| v as usize);
 
+            crate::debug_log!(
+                "INFO",
+                "Webview IPC: Salvando host '{}' ({}:{}, usuário: '{}', allow_domain: {}, icmp: {}, legacy: {})",
+                name, address, port, username, allow_domain, enable_icmp, legacy_ssh
+            );
+
             // Validação
             if name.is_empty() {
-                send_error(webview, "O nome/apelido do host é obrigatório."); return;
+                send_error(webview, ws_tx, "O nome/apelido do host é obrigatório."); return;
             }
             if address.is_empty() {
-                send_error(webview, "O endereço é obrigatório."); return;
+                send_error(webview, ws_tx, "O endereço é obrigatório."); return;
             }
             if let Err(e) = validate_address(&address, allow_domain) {
-                send_error(webview, &e); return;
+                send_error(webview, ws_tx, &e); return;
             }
             if username.is_empty() {
-                send_error(webview, "O nome de usuário é obrigatório."); return;
+                send_error(webview, ws_tx, "O nome de usuário é obrigatório."); return;
             }
             if port == 0 {
-                send_error(webview, "Porta inválida (1–65535)."); return;
+                send_error(webview, ws_tx, "Porta inválida (1–65535)."); return;
             }
 
             let auth = if password.is_empty() {
@@ -317,22 +360,37 @@ fn handle_ipc_message(
             }
 
             match save_config(&st.config) {
-                Ok(()) => send_success(webview, "Host salvo com sucesso."),
-                Err(e) => send_error(webview, &format!("Erro ao salvar: {}", e)),
+                Ok(()) => {
+                    send_to_frontend(webview, ws_tx, &json!({
+                        "type": "config_data",
+                        "hosts": serialize_hosts(&st.config),
+                        "bridges": serialize_bridges(&st.config),
+                    }));
+                    send_success(webview, ws_tx, "Host salvo com sucesso.");
+                }
+                Err(e) => send_error(webview, ws_tx, &format!("Erro ao salvar: {}", e)),
             }
         }
 
         "delete_host" => {
             let index = match parsed.get("index").and_then(|v| v.as_u64()) {
                 Some(i) => i as usize,
-                None => { send_error(webview, "Índice inválido."); return; }
+                None => { send_error(webview, ws_tx, "Índice inválido."); return; }
             };
+            crate::debug_log!("INFO", "Webview IPC: Removendo host no índice {}", index);
             let mut st = state.lock().unwrap();
             if index < st.config.root_nodes.len() {
                 st.config.root_nodes.remove(index);
                 match save_config(&st.config) {
-                    Ok(()) => send_success(webview, "Host removido."),
-                    Err(e) => send_error(webview, &format!("Erro ao salvar: {}", e)),
+                    Ok(()) => {
+                        send_to_frontend(webview, ws_tx, &json!({
+                            "type": "config_data",
+                            "hosts": serialize_hosts(&st.config),
+                            "bridges": serialize_bridges(&st.config),
+                        }));
+                        send_success(webview, ws_tx, "Host removido.");
+                    }
+                    Err(e) => send_error(webview, ws_tx, &format!("Erro ao salvar: {}", e)),
                 }
             }
         }
@@ -341,7 +399,7 @@ fn handle_ipc_message(
         "save_bridge" => {
             let data = match parsed.get("data") {
                 Some(d) => d,
-                None => { send_error(webview, "Dados da ponte não fornecidos."); return; }
+                None => { send_error(webview, ws_tx, "Dados da ponte não fornecidos."); return; }
             };
 
             let name = data.get("name").and_then(|v| v.as_str()).unwrap_or_default().trim().to_string();
@@ -352,20 +410,22 @@ fn handle_ipc_message(
             let allow_domain = data.get("allow_domain").and_then(|v| v.as_bool()).unwrap_or(false);
             let edit_index = parsed.get("edit_index").and_then(|v| v.as_u64()).map(|v| v as usize);
 
+            crate::debug_log!("INFO", "Webview IPC: Salvando ponte '{}' ({}:{}, usuário: '{}')", name, address, port, username);
+
             if name.is_empty() {
-                send_error(webview, "O nome da ponte é obrigatório."); return;
+                send_error(webview, ws_tx, "O nome da ponte é obrigatório."); return;
             }
             if address.is_empty() {
-                send_error(webview, "O endereço é obrigatório."); return;
+                send_error(webview, ws_tx, "O endereço é obrigatório."); return;
             }
             if let Err(e) = validate_address(&address, allow_domain) {
-                send_error(webview, &e); return;
+                send_error(webview, ws_tx, &e); return;
             }
             if username.is_empty() {
-                send_error(webview, "O nome de usuário é obrigatório."); return;
+                send_error(webview, ws_tx, "O nome de usuário é obrigatório."); return;
             }
             if port == 0 {
-                send_error(webview, "Porta inválida (1–65535)."); return;
+                send_error(webview, ws_tx, "Porta inválida (1–65535)."); return;
             }
 
             let mut st = state.lock().unwrap();
@@ -402,16 +462,24 @@ fn handle_ipc_message(
             }
 
             match save_config(&st.config) {
-                Ok(()) => send_success(webview, "Ponte salva com sucesso."),
-                Err(e) => send_error(webview, &format!("Erro ao salvar: {}", e)),
+                Ok(()) => {
+                    send_to_frontend(webview, ws_tx, &json!({
+                        "type": "config_data",
+                        "hosts": serialize_hosts(&st.config),
+                        "bridges": serialize_bridges(&st.config),
+                    }));
+                    send_success(webview, ws_tx, "Ponte salva com sucesso.");
+                }
+                Err(e) => send_error(webview, ws_tx, &format!("Erro ao salvar: {}", e)),
             }
         }
 
         "delete_bridge" => {
             let index = match parsed.get("index").and_then(|v| v.as_u64()) {
                 Some(i) => i as usize,
-                None => { send_error(webview, "Índice inválido."); return; }
+                None => { send_error(webview, ws_tx, "Índice inválido."); return; }
             };
+            crate::debug_log!("INFO", "Webview IPC: Removendo ponte no índice {}", index);
             let mut st = state.lock().unwrap();
             if index < st.config.bridges.len() {
                 let deleted_id = st.config.bridges[index].id;
@@ -428,8 +496,15 @@ fn handle_ipc_message(
                 }
 
                 match save_config(&st.config) {
-                    Ok(()) => send_success(webview, "Ponte removida."),
-                    Err(e) => send_error(webview, &format!("Erro ao salvar: {}", e)),
+                    Ok(()) => {
+                        send_to_frontend(webview, ws_tx, &json!({
+                            "type": "config_data",
+                            "hosts": serialize_hosts(&st.config),
+                            "bridges": serialize_bridges(&st.config),
+                        }));
+                        send_success(webview, ws_tx, "Ponte removida.");
+                    }
+                    Err(e) => send_error(webview, ws_tx, &format!("Erro ao salvar: {}", e)),
                 }
             }
         }
@@ -437,12 +512,14 @@ fn handle_ipc_message(
         // ── Terminal Spawn ───────────────────────────────────────────
         "open_terminal" => {
             let host_name = parsed.get("host_name").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            crate::debug_log!("INFO", "Webview IPC: Solicitando abertura de terminal para host '{}'", host_name);
             let mut st = state.lock().unwrap();
 
             if !st.client_config.allow_multiple_access_to_same_host {
                 if let Some(child) = st.active_terminals.get_mut(&host_name) {
                     if let Ok(None) = child.try_wait() {
-                        send_to_frontend(webview, &json!({
+                        crate::debug_log!("WARN", "Webview IPC: Sessão já ativa para host '{}', spawn ignorado", host_name);
+                        send_to_frontend(webview, ws_tx, &json!({
                             "type": "terminal_error",
                             "error": "Uma sessão para este host já está aberta."
                         }));
@@ -457,11 +534,16 @@ fn handle_ipc_message(
                 Ok(exe_path) => {
                     match std::process::Command::new(&exe_path)
                         .args(["--terminal", &host_name])
+                        .env("RUSTTY_CHILD", "1")
                         .spawn()
                     {
-                        Ok(child) => { st.active_terminals.insert(host_name, child); }
+                        Ok(child) => {
+                            crate::debug_log!("INFO", "Webview IPC: Terminal aberto com sucesso para host '{}' (PID: {})", host_name, child.id());
+                            st.active_terminals.insert(host_name, child);
+                        }
                         Err(e) => {
-                            send_to_frontend(webview, &json!({
+                            crate::debug_log!("ERROR", "Webview IPC: Falha ao abrir terminal para '{}': {}", host_name, e);
+                            send_to_frontend(webview, ws_tx, &json!({
                                 "type": "terminal_error",
                                 "error": format!("Falha ao abrir terminal: {}", e)
                             }));
@@ -469,7 +551,8 @@ fn handle_ipc_message(
                     }
                 }
                 Err(e) => {
-                    send_to_frontend(webview, &json!({
+                    crate::debug_log!("ERROR", "Webview IPC: Executável não encontrado: {}", e);
+                    send_to_frontend(webview, ws_tx, &json!({
                         "type": "terminal_error",
                         "error": format!("Executável não encontrado: {}", e)
                     }));
@@ -484,11 +567,13 @@ fn handle_ipc_message(
             if let Some(bridge) = st.config.bridges.get(index) {
                 let bridge_name = bridge.name.clone();
                 let bridge_id = bridge.id.to_string();
+                crate::debug_log!("INFO", "Webview IPC: Solicitando conexão para a ponte '{}' ({})", bridge_name, bridge_id);
 
                 if !st.client_config.allow_multiple_access_to_same_host {
                     if let Some(child) = st.active_terminals.get_mut(&bridge_name) {
                         if let Ok(None) = child.try_wait() {
-                            send_to_frontend(webview, &json!({
+                            crate::debug_log!("WARN", "Webview IPC: Sessão já ativa para a ponte '{}', spawn ignorado", bridge_name);
+                            send_to_frontend(webview, ws_tx, &json!({
                                 "type": "terminal_error",
                                 "error": "Uma sessão para esta ponte já está aberta."
                             }));
@@ -503,11 +588,16 @@ fn handle_ipc_message(
                     Ok(exe_path) => {
                         match std::process::Command::new(&exe_path)
                             .args(["--bridge-terminal", &bridge_id])
+                            .env("RUSTTY_CHILD", "1")
                             .spawn()
                         {
-                            Ok(child) => { st.active_terminals.insert(bridge_name, child); }
+                            Ok(child) => {
+                                crate::debug_log!("INFO", "Webview IPC: Terminal de ponte aberto com sucesso para '{}' (PID: {})", bridge_name, child.id());
+                                st.active_terminals.insert(bridge_name, child);
+                            }
                             Err(e) => {
-                                send_to_frontend(webview, &json!({
+                                crate::debug_log!("ERROR", "Webview IPC: Falha ao abrir ponte '{}': {}", bridge_name, e);
+                                send_to_frontend(webview, ws_tx, &json!({
                                     "type": "terminal_error",
                                     "error": format!("Falha ao abrir terminal: {}", e)
                                 }));
@@ -515,7 +605,8 @@ fn handle_ipc_message(
                         }
                     }
                     Err(e) => {
-                        send_to_frontend(webview, &json!({
+                        crate::debug_log!("ERROR", "Webview IPC: Executável não encontrado: {}", e);
+                        send_to_frontend(webview, ws_tx, &json!({
                             "type": "terminal_error",
                             "error": format!("Executável não encontrado: {}", e)
                         }));
@@ -527,27 +618,37 @@ fn handle_ipc_message(
         "quick_connect" => {
             let data = match parsed.get("data") {
                 Some(d) => d,
-                None => { send_error(webview, "Dados não fornecidos."); return; }
+                None => { send_error(webview, ws_tx, "Dados não fornecidos."); return; }
             };
             let address = data.get("address").and_then(|v| v.as_str()).unwrap_or_default();
             let port = data.get("port").and_then(|v| v.as_u64()).unwrap_or(22).to_string();
             let username = data.get("username").and_then(|v| v.as_str()).unwrap_or_default();
             let password = data.get("password").and_then(|v| v.as_str()).unwrap_or("none");
 
+            crate::debug_log!("INFO", "Webview IPC: Conexão rápida SSH solicitada para '{}@{}:{}'", username, address, port);
+
             match std::env::current_exe() {
                 Ok(exe_path) => {
-                    if let Err(e) = std::process::Command::new(&exe_path)
+                    match std::process::Command::new(&exe_path)
                         .args(["--quick-ssh", address, &port, username, password])
+                        .env("RUSTTY_CHILD", "1")
                         .spawn()
                     {
-                        send_to_frontend(webview, &json!({
-                            "type": "terminal_error",
-                            "error": format!("Falha ao abrir terminal: {}", e)
-                        }));
+                        Ok(child) => {
+                            crate::debug_log!("INFO", "Webview IPC: Conexão rápida SSH iniciada com sucesso (PID: {})", child.id());
+                        }
+                        Err(e) => {
+                            crate::debug_log!("ERROR", "Webview IPC: Falha ao iniciar conexão rápida: {}", e);
+                            send_to_frontend(webview, ws_tx, &json!({
+                                "type": "terminal_error",
+                                "error": format!("Falha ao abrir terminal: {}", e)
+                            }));
+                        }
                     }
                 }
                 Err(e) => {
-                    send_to_frontend(webview, &json!({
+                    crate::debug_log!("ERROR", "Webview IPC: Executável não encontrado: {}", e);
+                    send_to_frontend(webview, ws_tx, &json!({
                         "type": "terminal_error",
                         "error": format!("Executável não encontrado: {}", e)
                     }));
@@ -559,6 +660,7 @@ fn handle_ipc_message(
         "save_setting" => {
             let key = parsed.get("key").and_then(|v| v.as_str()).unwrap_or_default();
             let value = parsed.get("value");
+            crate::debug_log!("INFO", "Webview IPC: Alterando configuração '{}' para {:?}", key, value);
 
             let mut st = state.lock().unwrap();
             let cc = &mut st.client_config;
@@ -606,6 +708,10 @@ fn handle_ipc_message(
                     if let Some(v) = value.and_then(|v| v.as_bool()) {
                         cc.debug_mode = v;
                         crate::config::client::DEBUG_MODE.store(v, std::sync::atomic::Ordering::Relaxed);
+                        if v {
+                            crate::debug::init_debug_logger(false);
+                            crate::debug::spawn_debug_terminal();
+                        }
                     }
                 }
                 "antialiasing" => {
@@ -618,13 +724,13 @@ fn handle_ipc_message(
             }
 
             if let Err(e) = crate::config::client::save_client_config(cc) {
-                send_error(webview, &format!("Erro ao salvar configuração: {}", e));
+                send_error(webview, ws_tx, &format!("Erro ao salvar configuração: {}", e));
                 return;
             }
 
             // Envia a config atualizada de volta com o schema completo para manter
-            // o frontend sincronizado sem necessidade de nova requisição
-            send_to_frontend(webview, &json!({
+            // o frontend sincronizado sem necessidade de reload
+            send_to_frontend(webview, ws_tx, &json!({
                 "type": "client_config_data",
                 "data": serialize_client_config(cc),
                 "doc_pages": serialize_doc_pages(),
@@ -639,6 +745,7 @@ fn handle_ipc_message(
                 None => return,
             };
             let cust_type = data.get("type").and_then(|v| v.as_str()).unwrap_or_default();
+            crate::debug_log!("INFO", "Webview IPC: Salvando personalização do tipo '{}'", cust_type);
             let mut st = state.lock().unwrap();
 
             match cust_type {
@@ -688,30 +795,31 @@ fn handle_ipc_message(
             }
 
             if let Err(e) = save_client_config(&st.client_config) {
-                send_error(webview, &format!("Erro ao salvar personalização: {}", e));
+                send_error(webview, ws_tx, &format!("Erro ao salvar personalização: {}", e));
                 return;
             }
-            // Envia config atualizada com settings_schema para não quebrar a tela de Settings
-            send_to_frontend(webview, &json!({
+            // Envia config atualizada com settings_schema para atualizar a interface em tempo real
+            send_to_frontend(webview, ws_tx, &json!({
                 "type": "client_config_data",
                 "data": serialize_client_config(&st.client_config),
                 "doc_pages": serialize_doc_pages(),
                 "settings_schema": crate::config::client::get_settings_schema(),
             }));
-            send_success(webview, "Personalização salva com sucesso.");
+            send_success(webview, ws_tx, "Personalização salva com sucesso.");
         }
 
         "delete_keyword" => {
             let index = parsed.get("index").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+            crate::debug_log!("INFO", "Webview IPC: Removendo palavra-chave no índice {}", index);
             let mut st = state.lock().unwrap();
             if index < st.client_config.customization_data.keywords.len() {
                 st.client_config.customization_data.keywords.remove(index);
                 if let Err(e) = save_client_config(&st.client_config) {
-                    send_error(webview, &format!("Erro ao salvar: {}", e));
+                    send_error(webview, ws_tx, &format!("Erro ao salvar: {}", e));
                     return;
                 }
-                // Inclui settings_schema para não quebrar a tela de Settings após voltar
-                send_to_frontend(webview, &json!({
+                // Atualiza o frontend em tempo real
+                send_to_frontend(webview, ws_tx, &json!({
                     "type": "client_config_data",
                     "data": serialize_client_config(&st.client_config),
                     "doc_pages": serialize_doc_pages(),
@@ -737,6 +845,8 @@ fn handle_ipc_message(
                 })
                 .collect();
             drop(st);
+
+            crate::debug_log!("INFO", "Webview IPC: Iniciando checagem ICMP para {} hosts habilitados", hosts_for_icmp.len());
 
             let proxy = proxy.clone();
             std::thread::spawn(move || {
@@ -771,7 +881,7 @@ fn handle_ipc_message(
         }
         
         "internal_icmp_results" => {
-            send_to_frontend(webview, &json!({
+            send_to_frontend(webview, ws_tx, &json!({
                 "type": "icmp_results",
                 "data": parsed.get("data").unwrap_or(&json!({})),
             }));
@@ -780,6 +890,7 @@ fn handle_ipc_message(
         // ── Open URL ─────────────────────────────────────────────────
         "open_url" => {
             if let Some(url) = parsed.get("url").and_then(|v| v.as_str()) {
+                crate::debug_log!("INFO", "Webview IPC: Abrindo URL no navegador externo: {}", url);
                 #[cfg(target_os = "windows")]
                 let _ = std::process::Command::new("cmd")
                     .args(["/C", "start", url])
@@ -795,24 +906,6 @@ fn handle_ipc_message(
     }
 }
 
-#[allow(dead_code)]
-fn send_success(webview: &WebView, message: &str) {
-    send_to_frontend(webview, &json!({
-        "type": "operation_result",
-        "success": true,
-        "message": message,
-    }));
-}
-
-#[allow(dead_code)]
-fn send_error(webview: &WebView, error: &str) {
-    send_to_frontend(webview, &json!({
-        "type": "operation_result",
-        "success": false,
-        "error": error,
-    }));
-}
-
 // ─── Entry Point ─────────────────────────────────────────────────────────────
 
 pub fn run() -> iced::Result {
@@ -826,14 +919,73 @@ pub fn run() -> iced::Result {
         .build(&event_loop)
         .unwrap();
 
+    // ── WebSocket Server (Live Real-Time Communication) ───────────────────────
+    let (ws_tx, _) = broadcast::channel::<String>(256);
+    let (ws_port_tx, ws_port_rx) = std::sync::mpsc::channel::<u16>();
+
+    let ws_tx_clone = ws_tx.clone();
+    let proxy_ws = proxy.clone();
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create tokio runtime for webview websocket");
+
+        rt.block_on(async move {
+            let listener = TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("Failed to bind websocket port");
+            let local_port = listener.local_addr().unwrap().port();
+            let _ = ws_port_tx.send(local_port);
+            crate::debug_log!("INFO", "Webview: Servidor WebSocket iniciado em 127.0.0.1:{}", local_port);
+
+            while let Ok((stream, peer_addr)) = listener.accept().await {
+                crate::debug_log!("INFO", "Webview: Nova conexão WebSocket de {}", peer_addr);
+                let ws_tx = ws_tx_clone.clone();
+                let proxy = proxy_ws.clone();
+                tokio::spawn(async move {
+                    if let Ok(ws_stream) = tokio_tungstenite::accept_async(stream).await {
+                        crate::debug_log!("INFO", "Webview: Handshake WebSocket estabelecido para {}", peer_addr);
+                        let (mut ws_write, mut ws_read) = ws_stream.split();
+                        let mut bcast_rx = ws_tx.subscribe();
+
+                        // Forward broadcast messages to this client
+                        let forward_task = tokio::spawn(async move {
+                            while let Ok(msg) = bcast_rx.recv().await {
+                                if ws_write.send(WsMessage::Text(msg)).await.is_err() {
+                                    break;
+                                }
+                            }
+                        });
+
+                        // Read messages from client and forward to EventLoop
+                        while let Some(Ok(msg)) = ws_read.next().await {
+                            if let WsMessage::Text(text) = msg {
+                                let _ = proxy.send_event(text);
+                            }
+                        }
+                        crate::debug_log!("INFO", "Webview: Conexão WebSocket encerrada para {}", peer_addr);
+                        forward_task.abort();
+                    }
+                });
+            }
+        });
+    });
+
+    let ws_port = ws_port_rx.recv().unwrap_or(0);
+
     // ── Assets embarcados ────────────────────────────────────────────────────
     let html_content = include_str!("../webview/index.html");
+    let html_with_port = html_content.replace(
+        "<head>",
+        &format!("<head><script>window.WS_PORT = {};</script>", ws_port)
+    );
     let css_content  = include_str!("../webview/style.css");
     let js_content   = include_str!("../webview/app.js");
     let icon_content = include_bytes!("../assets/images/iconv2.png");
 
     // ── Estado compartilhado ─────────────────────────────────────────────────
-    let shared_state = Arc::new(Mutex::new(WebviewState::new()));
+    let shared_state = Arc::new(Mutex::new(WebviewState::new(ws_tx.clone())));
     let ipc_state = Arc::clone(&shared_state);
 
     // ── Webview ──────────────────────────────────────────────────────────────
@@ -862,23 +1014,21 @@ pub fn run() -> iced::Result {
                 _ => {
                     Response::builder()
                         .header("Content-Type", "text/html; charset=utf-8")
-                        .body(html_content.as_bytes().to_vec().into())
+                        .body(html_with_port.as_bytes().to_vec().into())
                         .unwrap()
                 }
             }
         })
-        .with_url("rustty://localhost")
+        .with_url(&format!("rustty://localhost/?ws_port={}", ws_port))
         .with_ipc_handler({
             let proxy_clone = proxy.clone();
             move |msg| {
                 let body = msg.body();
-                // Encaminha a mensagem IPC do JS diretamente para a thread principal (Event Loop)
                 let _ = proxy_clone.send_event(body.to_string());
             }
         })
         .build()
         .unwrap();
-
 
     // ── Verificar atualização ────────────────────────────────────────────────
     {
@@ -888,11 +1038,11 @@ pub fn run() -> iced::Result {
                 "type": "update_notification",
                 "message": "RusTTY foi atualizado com sucesso!"
             });
-            let script = format!(
-                "setTimeout(function() {{ window.__rustCallback('{}'); }}, 2000);",
-                serde_json::to_string(&update_msg).unwrap_or_default().replace('\\', "\\\\").replace('\'', "\\'"),
-            );
-            let _ = webview.evaluate_script(&script);
+            let ws_tx_update = ws_tx.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(2));
+                let _ = ws_tx_update.send(serde_json::to_string(&update_msg).unwrap_or_default());
+            });
         }
         if st.client_config.enable_auto_update {
             std::thread::spawn(move || {
@@ -906,10 +1056,9 @@ pub fn run() -> iced::Result {
         elwt.set_control_flow(ControlFlow::Wait);
         match event {
             Event::UserEvent(msg_body) => {
-                // Aqui estamos na thread principal e TEMOS acesso ao `webview` real
                 if let Ok(parsed) = serde_json::from_str::<Value>(&msg_body) {
                     if let Some(msg_type) = parsed.get("type").and_then(|t| t.as_str()) {
-                        handle_ipc_message(msg_type, &parsed, &ipc_state, &webview, &proxy);
+                        handle_ipc_message(msg_type, &parsed, &ipc_state, &webview, &proxy, &ws_tx);
                     }
                 }
             }

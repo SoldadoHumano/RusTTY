@@ -15,14 +15,7 @@
 
 use vte::{Params, Perform};
 
-// ─── Constantes de Layout ─────────────────────────────────────────────────────
 
-/// Tamanho de fonte em pixels lógicos (Consolas 14 no Windows).
-pub const FONT_SIZE: f32 = 14.0;
-/// Largura de célula monospace em pixels (Consolas 14 ≈ 8.4 px).
-pub const CELL_W: f32 = 8.4;
-/// Altura de célula (incluindo espaçamento de linha).
-pub const CELL_H: f32 = 19.0;
 
 // ─── Tipos de Cor ─────────────────────────────────────────────────────────────
 
@@ -127,6 +120,14 @@ impl Cell {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MouseMode {
+    None,
+    Normal,      // 1000
+    ButtonEvent, // 1002
+    AnyEvent,    // 1003
+}
+
 // ─── Grade do Terminal ────────────────────────────────────────────────────────
 
 /// Estado completo da grade do terminal: células, cursor e atributos SGR.
@@ -148,6 +149,18 @@ pub struct TerminalGrid {
     /// Pendente de wrap na próxima impressão
     pending_wrap:     bool,
     pub max_scrollback: usize,
+
+    // ── Buffer Alternativo (Vim / Htop / Btop) ──
+    pub is_alt_screen: bool,
+    pub alt_cells: Vec<Vec<Cell>>,
+    saved_primary_cursor: (usize, usize),
+    saved_primary_attrs: CellAttrs,
+
+    // ── Mouse & Terminal Modes ──
+    pub mouse_mode: MouseMode,
+    pub sgr_mouse: bool,
+    pub bracketed_paste: bool,
+    pub cursor_visible: bool,
 }
 
 impl TerminalGrid {
@@ -165,12 +178,26 @@ impl TerminalGrid {
             auto_wrap:    true,
             pending_wrap: false,
             max_scrollback,
+            is_alt_screen: false,
+            alt_cells: vec![vec![Cell::default(); cols]; rows],
+            saved_primary_cursor: (0, 0),
+            saved_primary_attrs: CellAttrs::default(),
+            mouse_mode: MouseMode::None,
+            sgr_mouse: false,
+            bracketed_paste: false,
+            cursor_visible: true,
         }
     }
 
     /// Retorna uma referência à linha correspondente ao índice absoluto `abs_row`.
     pub fn get_line(&self, abs_row: usize) -> Option<&Vec<Cell>> {
-        if abs_row < self.scrollback.len() {
+        if self.is_alt_screen {
+            if abs_row < self.rows {
+                Some(&self.cells[abs_row])
+            } else {
+                None
+            }
+        } else if abs_row < self.scrollback.len() {
             Some(&self.scrollback[abs_row])
         } else {
             let active_row = abs_row - self.scrollback.len();
@@ -225,12 +252,12 @@ impl TerminalGrid {
     fn scroll_up(&mut self, n: usize) {
         for _ in 0..n {
             let row = self.cells.remove(0);
-            if self.max_scrollback > 0 {
+            if !self.is_alt_screen && self.max_scrollback > 0 {
                 self.scrollback.push(row);
             }
             self.cells.push(vec![Cell::default(); self.cols]);
         }
-        if self.max_scrollback > 0 && self.scrollback.len() > self.max_scrollback {
+        if !self.is_alt_screen && self.max_scrollback > 0 && self.scrollback.len() > self.max_scrollback {
             let excess = self.scrollback.len() - self.max_scrollback;
             self.scrollback.drain(0..excess);
         } else if self.max_scrollback == 0 {
@@ -292,20 +319,86 @@ impl TerminalGrid {
         self.cursor_col = self.cursor_col.min(self.cols.saturating_sub(1));
     }
 
+    // ── Buffer Alternativo ───────────────────────────────────────────────────
+
+    pub fn enter_alt_screen(&mut self) {
+        if !self.is_alt_screen {
+            self.is_alt_screen = true;
+            self.saved_primary_cursor = (self.cursor_row, self.cursor_col);
+            self.saved_primary_attrs = self.current_attrs;
+            if self.alt_cells.len() != self.rows || self.alt_cells.first().map_or(0, |r| r.len()) != self.cols {
+                self.alt_cells = vec![vec![Cell::default(); self.cols]; self.rows];
+            }
+            std::mem::swap(&mut self.cells, &mut self.alt_cells);
+            self.clear_all();
+            self.cursor_row = 0;
+            self.cursor_col = 0;
+            crate::debug_log!("INFO", "TerminalGrid: ativando Buffer Alternativo (tela cheia/TUI)");
+        }
+    }
+
+    pub fn leave_alt_screen(&mut self) {
+        if self.is_alt_screen {
+            self.is_alt_screen = false;
+            std::mem::swap(&mut self.cells, &mut self.alt_cells);
+            let (r, c) = self.saved_primary_cursor;
+            self.cursor_row = r.min(self.rows.saturating_sub(1));
+            self.cursor_col = c.min(self.cols.saturating_sub(1));
+            self.current_attrs = self.saved_primary_attrs;
+            crate::debug_log!("INFO", "TerminalGrid: desativando Buffer Alternativo (restaurado buffer primário)");
+        }
+    }
+
     // ── API Pública ───────────────────────────────────────────────────────────
 
-    /// Redimensiona a grade, preservando o conteúdo visível.
+    /// Redimensiona a grade, preservando o conteúdo visível e scrollback.
     pub fn resize(&mut self, rows: usize, cols: usize) {
-        // Ajusta cada linha visível
+        crate::debug_log!("DEBUG", "TerminalGrid::resize: {}x{} -> {}x{} (scrollback: {} linhas)", self.cols, self.rows, cols, rows, self.scrollback.len());
         for row in &mut self.cells {
             row.resize(cols, Cell::default());
         }
-        // Ajusta cada linha no scrollback
+        for row in &mut self.alt_cells {
+            row.resize(cols, Cell::default());
+        }
         for row in &mut self.scrollback {
             row.resize(cols, Cell::default());
         }
-        // Ajusta número de linhas
-        self.cells.resize(rows, vec![Cell::default(); cols]);
+
+        if !self.is_alt_screen {
+            if rows < self.rows {
+                let delta = self.rows - rows;
+                for _ in 0..delta {
+                    if !self.cells.is_empty() {
+                        let row = self.cells.remove(0);
+                        if self.max_scrollback > 0 {
+                            self.scrollback.push(row);
+                        }
+                    }
+                }
+                self.cursor_row = self.cursor_row.saturating_sub(delta);
+            } else if rows > self.rows {
+                let delta = rows - self.rows;
+                let mut pulled = 0;
+                while pulled < delta && !self.scrollback.is_empty() {
+                    let row = self.scrollback.pop().unwrap();
+                    self.cells.insert(0, row);
+                    pulled += 1;
+                }
+                while self.cells.len() < rows {
+                    self.cells.push(vec![Cell::default(); cols]);
+                }
+                self.cursor_row = (self.cursor_row + pulled).min(rows.saturating_sub(1));
+            }
+        } else {
+            self.cells.resize(rows, vec![Cell::default(); cols]);
+        }
+        self.alt_cells.resize(rows, vec![Cell::default(); cols]);
+
+        if self.max_scrollback > 0 && self.scrollback.len() > self.max_scrollback {
+            let excess = self.scrollback.len() - self.max_scrollback;
+            self.scrollback.drain(0..excess);
+        }
+
         self.rows = rows;
         self.cols = cols;
         self.clamp_cursor();
@@ -320,7 +413,7 @@ impl TerminalGrid {
         let (r2, c2) = end;
 
         let mut out = String::new();
-        let total_rows = self.scrollback.len() + self.rows;
+        let total_rows = if self.is_alt_screen { self.rows } else { self.scrollback.len() + self.rows };
         let max_r2 = total_rows.saturating_sub(1);
         let actual_r2 = r2.min(max_r2);
 
@@ -328,7 +421,9 @@ impl TerminalGrid {
             let from = if r == r1 { c1 } else { 0 };
             let to   = if r == r2 { (c2 + 1).min(self.cols) } else { self.cols };
 
-            let row_slice = if r < self.scrollback.len() {
+            let row_slice = if self.is_alt_screen {
+                if r < self.rows { &self.cells[r] } else { continue; }
+            } else if r < self.scrollback.len() {
                 &self.scrollback[r]
             } else {
                 let cell_r = r - self.scrollback.len();
@@ -500,6 +595,40 @@ impl Perform for TerminalGrid {
                 self.cursor_row = r.min(self.rows - 1);
                 self.cursor_col = c.min(self.cols - 1);
                 self.current_attrs = self.saved_attrs;
+            }
+
+            // ── Set/Reset Mode (SM / RM / DECSET / DECRST) ───────────────────
+            'h' => {
+                let is_private = _intermediates.contains(&b'?');
+                if is_private {
+                    for &p in &ps {
+                        match p {
+                            1049 | 1047 | 47 => self.enter_alt_screen(),
+                            1000 => self.mouse_mode = MouseMode::Normal,
+                            1002 => self.mouse_mode = MouseMode::ButtonEvent,
+                            1003 => self.mouse_mode = MouseMode::AnyEvent,
+                            1006 => self.sgr_mouse = true,
+                            2004 => self.bracketed_paste = true,
+                            25 => self.cursor_visible = true,
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            'l' => {
+                let is_private = _intermediates.contains(&b'?');
+                if is_private {
+                    for &p in &ps {
+                        match p {
+                            1049 | 1047 | 47 => self.leave_alt_screen(),
+                            1000 | 1002 | 1003 => self.mouse_mode = MouseMode::None,
+                            1006 => self.sgr_mouse = false,
+                            2004 => self.bracketed_paste = false,
+                            25 => self.cursor_visible = false,
+                            _ => {}
+                        }
+                    }
+                }
             }
 
             _ => {} // Outros CSI não tratados
@@ -713,3 +842,115 @@ impl TerminalState {
         self.grid.cursor_col = 0;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn get_line_text(grid: &TerminalGrid, row: usize) -> String {
+        grid.cells
+            .get(row)
+            .map(|r| r.iter().map(|c| c.ch).collect::<String>().trim_end().to_string())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn test_resize_preserves_lines_and_scrollback() {
+        let mut state = TerminalState::new(4, 20, 100);
+        state.process_bytes(b"line 1\r\nline 2\r\nline 3\r\nline 4");
+
+        // Check line 1 is in line 0
+        assert_eq!(get_line_text(&state.grid, 0), "line 1");
+        assert_eq!(get_line_text(&state.grid, 3), "line 4");
+
+        // Shrink height from 4 to 2: top lines should enter scrollback, bottom lines remain
+        state.resize(2, 20);
+        assert_eq!(state.grid.rows, 2);
+        assert_eq!(state.grid.scrollback.len(), 2);
+        assert_eq!(get_line_text(&state.grid, 0), "line 3");
+        assert_eq!(get_line_text(&state.grid, 1), "line 4");
+
+        // Expand back to 4: lines should be pulled back from scrollback
+        state.resize(4, 20);
+        assert_eq!(state.grid.rows, 4);
+        assert_eq!(state.grid.scrollback.len(), 0);
+        assert_eq!(get_line_text(&state.grid, 0), "line 1");
+        assert_eq!(get_line_text(&state.grid, 1), "line 2");
+        assert_eq!(get_line_text(&state.grid, 2), "line 3");
+        assert_eq!(get_line_text(&state.grid, 3), "line 4");
+    }
+
+    #[test]
+    fn test_alt_screen_buffer_switching() {
+        let mut state = TerminalState::new(5, 20, 100);
+        state.process_bytes(b"shell command 1\r\nshell command 2\r\n");
+
+        assert_eq!(get_line_text(&state.grid, 0), "shell command 1");
+        assert_eq!(get_line_text(&state.grid, 1), "shell command 2");
+        assert!(!state.grid.is_alt_screen);
+
+        // Enter alternate screen (vim / htop): \x1b[?1049h
+        state.process_bytes(b"\x1b[?1049h");
+        assert!(state.grid.is_alt_screen);
+
+        // In alt screen, write vim contents
+        state.process_bytes(b"VIM EDITOR BUFFER\r\n~ line 2\r\n");
+        assert_eq!(get_line_text(&state.grid, 0), "VIM EDITOR BUFFER");
+        assert_eq!(get_line_text(&state.grid, 1), "~ line 2");
+
+        // Exit vim / alt screen: \x1b[?1049l
+        state.process_bytes(b"\x1b[?1049l");
+        assert!(!state.grid.is_alt_screen);
+
+        // Verify primary screen was restored completely
+        assert_eq!(get_line_text(&state.grid, 0), "shell command 1");
+        assert_eq!(get_line_text(&state.grid, 1), "shell command 2");
+    }
+
+    #[test]
+    fn test_mouse_modes_and_bracketed_paste() {
+        let mut state = TerminalState::new(5, 20, 100);
+        assert_eq!(state.grid.mouse_mode, MouseMode::None);
+        assert!(!state.grid.sgr_mouse);
+        assert!(!state.grid.bracketed_paste);
+
+        // Enable Normal mouse (1000), SGR mouse (1006), bracketed paste (2004)
+        state.process_bytes(b"\x1b[?1000h\x1b[?1006h\x1b[?2004h");
+        assert_eq!(state.grid.mouse_mode, MouseMode::Normal);
+        assert!(state.grid.sgr_mouse);
+        assert!(state.grid.bracketed_paste);
+
+        // Switch to ButtonEvent mouse (1002)
+        state.process_bytes(b"\x1b[?1002h");
+        assert_eq!(state.grid.mouse_mode, MouseMode::ButtonEvent);
+
+        // Switch to AnyEvent mouse (1003)
+        state.process_bytes(b"\x1b[?1003h");
+        assert_eq!(state.grid.mouse_mode, MouseMode::AnyEvent);
+
+        // Disable mouse and bracketed paste
+        state.process_bytes(b"\x1b[?1003l\x1b[?1006l\x1b[?2004l");
+        assert_eq!(state.grid.mouse_mode, MouseMode::None);
+        assert!(!state.grid.sgr_mouse);
+        assert!(!state.grid.bracketed_paste);
+    }
+
+    #[test]
+    fn test_multiline_paste_normalization() {
+        let raw_windows_paste = "comando 1\r\ncomando 2\r\ncomando 3\r\n";
+        let normalized = raw_windows_paste.replace("\r\n", "\r").replace('\n', "\r");
+        assert_eq!(normalized, "comando 1\rcomando 2\rcomando 3\r");
+
+        let raw_unix_paste = "comando 1\ncomando 2\ncomando 3";
+        let normalized_unix = raw_unix_paste.replace("\r\n", "\r").replace('\n', "\r");
+        assert_eq!(normalized_unix, "comando 1\rcomando 2\rcomando 3");
+    }
+
+    #[test]
+    fn test_font_measurement() {
+        let (cw, ch) = crate::terminal_app::measure_cell_metrics(14.0);
+        assert!(cw > 5.0 && cw < 15.0);
+        assert!(ch > 10.0 && ch < 30.0);
+    }
+}
+

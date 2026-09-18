@@ -261,17 +261,17 @@ pub fn view<'a>(
                 row![
                     text("Nome do Cliente").size(16),
                     Space::with_width(Length::Fill),
-                    text("RusTTY Experimental").size(16).style(theme::Text::Color(MUTED)),
+                    text("RusTTY").size(16).style(theme::Text::Color(MUTED)),
                 ].align_items(Alignment::Center),
                 row![
                     text("Versão do Cliente").size(16),
                     Space::with_width(Length::Fill),
-                    text("v1.1.0").size(16).style(theme::Text::Color(MUTED)),
+                    text("v1.2.0").size(16).style(theme::Text::Color(MUTED)),
                 ].align_items(Alignment::Center),
                 row![
                     text("Data da Versão").size(16),
                     Space::with_width(Length::Fill),
-                    text("05/09/2026").size(16).style(theme::Text::Color(MUTED)),
+                    text("18/09/2026").size(16).style(theme::Text::Color(MUTED)),
                 ].align_items(Alignment::Center),
                 row![
                     text("Licença").size(16),

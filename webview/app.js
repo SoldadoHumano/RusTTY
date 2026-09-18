@@ -48,10 +48,62 @@ function icon(name, size = 20) {
 
 //  IPC Layer 
 
+let liveWs = null;
+
+function connectWebSocket() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const port = window.WS_PORT || urlParams.get('ws_port');
+  if (!port) {
+    console.log('[RusTTY] WS_PORT not found, relying on native IPC fallback');
+    return;
+  }
+  try {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}`);
+    liveWs = ws;
+
+    ws.onopen = () => {
+      console.log('[RusTTY] Live WebSocket connected on port', port);
+      IPC.requestConfig();
+      IPC.requestClientConfig();
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        handleRustMessage(msg);
+      } catch (err) {
+        console.error('[RusTTY] WS JSON parse error:', err);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('[RusTTY] Live WebSocket disconnected, retrying in 1s...');
+      liveWs = null;
+      setTimeout(connectWebSocket, 1000);
+    };
+
+    ws.onerror = (err) => {
+      console.warn('[RusTTY] WebSocket error:', err);
+    };
+  } catch (e) {
+    console.error('[RusTTY] Failed to connect WebSocket:', e);
+  }
+}
+
 const IPC = {
   send(message) {
-    if (window.ipc && window.ipc.postMessage) {
-      window.ipc.postMessage(JSON.stringify(message));
+    const jsonStr = JSON.stringify(message);
+    let sent = false;
+    if (liveWs && liveWs.readyState === WebSocket.OPEN) {
+      try {
+        liveWs.send(jsonStr);
+        sent = true;
+      } catch (e) {
+        console.warn('[RusTTY] Error sending via WebSocket:', e);
+      }
+    }
+    if (!sent && window.ipc && window.ipc.postMessage) {
+      window.ipc.postMessage(jsonStr);
     }
   },
 
@@ -77,8 +129,12 @@ const IPC = {
   openUrl(url) { this.send({ type: 'open_url', url }); },
 };
 
-// Rust �  Frontend callback
+// Rust → Frontend callback (fallback nativo)
 window.__rustCallback = function (dataStr) {
+  // Quando o WebSocket está ativo, as mensagens já chegam por ele em tempo real
+  if (liveWs && liveWs.readyState === WebSocket.OPEN) {
+    return;
+  }
   try {
     const msg = typeof dataStr === 'string' ? JSON.parse(dataStr) : dataStr;
     handleRustMessage(msg);
@@ -174,7 +230,13 @@ function handleRustMessage(msg) {
       if (msg.doc_pages && msg.doc_pages.length > 0) {
         state.docPages = msg.doc_pages;
       }
-      if (state.currentView === 'settings') renderView();
+      if (state.currentView === 'settings') {
+        const activeEl = document.activeElement;
+        const isEditingField = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT') && !activeEl.classList.contains('slider');
+        if (!isEditingField) {
+          renderView();
+        }
+      }
       if (state.currentView === 'customization') renderView();
       break;
 
@@ -417,7 +479,7 @@ function viewHome() {
        </div>`;
 
   return `
-    <div class="view-inner--wide">
+    <div class="view-inner view-inner--wide">
       <div class="page-header">
         <div class="page-header-left">
           <span class="page-title-icon">${icon('server', 28)}</span>
@@ -462,10 +524,7 @@ function hostCard(host, index) {
         <div class="host-name">${escHtml(host.name)}</div>
         <div class="host-detail">${escHtml(host.username)}@${escHtml(host.address)}:${host.port}</div>
       </div>
-      <div class="host-meta">
-        ${bridgeTag}
-        <span class="host-badge">:${host.port}</span>
-      </div>
+      ${bridgeTag ? `<div class="host-meta">${bridgeTag}</div>` : ''}
       <div class="host-actions">
         <button type="button" class="btn btn--icon" onclick="event.stopPropagation(); navigate('new-host', { editIndex: ${index} })" title="Editar">
           ${icon('edit', 16)}
@@ -637,7 +696,7 @@ function viewBridges() {
        </div>`;
 
   return `
-    <div class="view-inner--wide">
+    <div class="view-inner view-inner--wide">
       <div class="page-header">
         <div class="page-header-left">
           <span class="page-title-icon">${icon('network', 28)}</span>
@@ -668,9 +727,6 @@ function bridgeCard(bridge, index) {
       <div class="host-info">
         <div class="host-name">${escHtml(bridge.name)}</div>
         <div class="host-detail">${escHtml(bridge.username)}@${escHtml(bridge.address)}:${bridge.port}</div>
-      </div>
-      <div class="host-meta">
-        <span class="host-badge">:${bridge.port}</span>
       </div>
       <div class="host-actions">
         <button type="button" class="btn btn--icon" onclick="event.stopPropagation(); navigate('new-bridge', { editIndex: ${index} })" title="Editar">
@@ -928,9 +984,9 @@ function viewSettings() {
       <div class="settings-group-title">SOBRE O CLIENTE</div>
       <div class="settings-group mb-6">
         <div class="about-grid">
-          ${aboutRow('Nome do Cliente', 'RusTTY Beta')}
-          ${aboutRow('Versão do Cliente', 'Beta v1.0.0')}
-          ${aboutRow('Data da Versão', '28/08/2026')}
+          ${aboutRow('Nome do Cliente', 'RusTTY')}
+          ${aboutRow('Versão do Cliente', 'v1.2.0')}
+          ${aboutRow('Data da Versão', '18/09/2026')}
           ${aboutRow('Licença', 'GNU Affero General Public License v3')}
           ${aboutRow('Desenvolvedor', 'Vitor')}
           ${aboutRow('Co-desenvolvedor', ' ')}
@@ -1237,7 +1293,7 @@ function viewDocumentation() {
   const rendered = content ? renderMarkdown(content) : '<p class="text-muted">Carregando...</p>';
 
   return `
-    <div class="view-inner--wide">
+    <div class="view-inner view-inner--wide">
       <div class="doc-content">${rendered}</div>
     </div>
   `;
@@ -1297,8 +1353,8 @@ function renderMarkdown(md) {
 
 function checkbox(bindKey, checked, label) {
   return `
-    <label class="checkbox-wrapper" onclick="toggleCheckbox('${bindKey}')">
-      <input type="checkbox" ${checked ? 'checked' : ''}>
+    <label class="checkbox-wrapper">
+      <input type="checkbox" ${checked ? 'checked' : ''} onchange="onCheckboxChange('${bindKey}', this.checked)">
       <span class="checkbox-box">
         ${icon('check', 14)}
       </span>
@@ -1307,24 +1363,50 @@ function checkbox(bindKey, checked, label) {
   `;
 }
 
-function toggleSwitch(settingKey, checked) {
-  return `
-    <label class="toggle-switch">
-      <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleSetting('${settingKey}')">
-      <span class="toggle-track"></span>
-      <span class="toggle-knob"></span>
-    </label>
-  `;
-}
+function onCheckboxChange(bindKey, isChecked) {
+  const parts = bindKey.split('.');
+  let obj = state;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (!obj[parts[i]]) obj[parts[i]] = {};
+    obj = obj[parts[i]];
+  }
+  obj[parts[parts.length - 1]] = isChecked;
 
-function toggleSetting(key) {
-  const newVal = !state.clientConfig[key];
-  state.clientConfig[key] = newVal;
-  IPC.saveSetting(key, newVal);
+  // Se "Habilitar ponte" mudou, atualiza a view para exibir ou ocultar o seletor de ponte
+  if (bindKey === 'hostForm.enableBridge') {
+    if (isChecked && !state.hostForm.selectedBridge) {
+      state.hostForm.selectedBridge = state.bridges[0]?.id ?? null;
+    }
+    renderView();
+    return;
+  }
 
-  // If customization was toggled, update the sidebar without re-rendering the whole view
-  if (key === 'enable_customization') {
-    renderSidebar();
+  // Se divisão de IP público/privado mudou, atualiza a view para alternar os pickers
+  if (bindKey === 'ipForm.split') {
+    renderView();
+    return;
+  }
+
+  // Se permitir domínio mudou no hostForm ou bridgeForm, atualiza o placeholder dinamicamente sem perder foco
+  if (bindKey === 'hostForm.allowDomain') {
+    const addrInput = document.querySelector('[data-bind="hostForm.address"]');
+    if (addrInput) {
+      addrInput.placeholder = isChecked
+        ? 'Ex: meu.servidor.com ou 192.168.1.1'
+        : 'Ex: 192.168.1.1 (somente IP numérico)';
+    }
+  } else if (bindKey === 'bridgeForm.allowDomain') {
+    const addrInput = document.querySelector('[data-bind="bridgeForm.address"]');
+    if (addrInput) {
+      addrInput.placeholder = isChecked
+        ? 'Ex: ponte.empresa.com ou 10.0.0.1'
+        : 'Ex: 10.0.0.1 (somente IP numérico)';
+    }
+  } else if (bindKey === 'quickConnectForm.showPassword') {
+    const passInput = document.querySelector('[data-bind="quickConnectForm.password"]');
+    if (passInput) {
+      passInput.type = isChecked ? 'text' : 'password';
+    }
   }
 }
 
@@ -1332,17 +1414,29 @@ function toggleCheckbox(bindKey) {
   const parts = bindKey.split('.');
   let obj = state;
   for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
-  obj[parts[parts.length - 1]] = !obj[parts[parts.length - 1]];
+  const newVal = !obj[parts[parts.length - 1]];
+  onCheckboxChange(bindKey, newVal);
+}
 
-  // Quando "Habilitar ponte" é ativado sem bridge já selecionada, inicializa
-  // com a primeira bridge disponível. Sem isso, o <select> mostraria a primeira
-  // opção visualmente, mas state.hostForm.selectedBridge ficaria null e o
-  // host seria salvo sem bridge_id se o usuário não interagisse com o <select>.
-  if (bindKey === 'hostForm.enableBridge' && state.hostForm.enableBridge && !state.hostForm.selectedBridge) {
-    state.hostForm.selectedBridge = state.bridges[0]?.id ?? null;
+function toggleSwitch(settingKey, checked) {
+  return `
+    <label class="toggle-switch">
+      <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleSetting('${settingKey}', this.checked)">
+      <span class="toggle-track"></span>
+      <span class="toggle-knob"></span>
+    </label>
+  `;
+}
+
+function toggleSetting(key, isChecked) {
+  const newVal = isChecked !== undefined ? isChecked : !state.clientConfig[key];
+  state.clientConfig[key] = newVal;
+  IPC.saveSetting(key, newVal);
+
+  // If customization was toggled, update the sidebar without re-rendering the whole view
+  if (key === 'enable_customization') {
+    renderSidebar();
   }
-
-  renderView();
 }
 
 // Modals 
@@ -1407,8 +1501,21 @@ function confirmDeleteBridge(index) {
 // Toast System 
 
 const Toast = {
+  lastSignature: '',
+  lastTimestamp: 0,
+
   show(message, type = 'info', duration = 4000) {
+    const now = Date.now();
+    const sig = `${type}::${message}`;
+    // Deduplicação defensiva: impede toasts idênticos disparados em sequência rápida (< 1.5s)
+    if (this.lastSignature === sig && (now - this.lastTimestamp < 1500)) {
+      return;
+    }
+    this.lastSignature = sig;
+    this.lastTimestamp = now;
+
     const container = document.getElementById('toast-container');
+    if (!container) return;
     const toastEl = document.createElement('div');
     toastEl.className = `toast toast--${type}`;
 
@@ -1519,6 +1626,9 @@ function escAttr(str) {
 //  Global Event Listeners 
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Inicia conexão WebSocket em tempo real para live updates
+  connectWebSocket();
+
   // Close context menu on click outside
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.context-menu')) closeContextMenu();

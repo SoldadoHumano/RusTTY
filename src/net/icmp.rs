@@ -5,6 +5,7 @@ use std::os::windows::process::CommandExt;
 /// Realiza até 3 tentativas de ping no IP/Host fornecido.
 /// Retorna `true` se ao menos uma tentativa for bem-sucedida, `false` caso contrário.
 pub async fn check_icmp(address: &str) -> bool {
+    crate::debug_log!("DEBUG", "ICMP: Iniciando verificação de ping para '{}'", address);
     #[cfg(target_os = "windows")]
     const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -65,6 +66,7 @@ pub async fn check_icmp(address: &str) -> bool {
                     });
 
                     if success {
+                        crate::debug_log!("INFO", "ICMP: Host '{}' respondeu ao ping (ONLINE)", address);
                         return true;
                     }
                 }
@@ -75,5 +77,6 @@ pub async fn check_icmp(address: &str) -> bool {
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     }
     
+    crate::debug_log!("WARN", "ICMP: Host '{}' sem resposta após 3 tentativas (OFFLINE)", address);
     false
 }

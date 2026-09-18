@@ -141,7 +141,8 @@ pub fn save_config(config: &AppConfig) -> Result<(), String> {
     let encrypted_data = crypto::encrypt_data(&json_bytes)?;
     
     let path = get_config_path();
-    fs::write(path, encrypted_data).map_err(|e| e.to_string())?;
+    fs::write(&path, encrypted_data).map_err(|e| e.to_string())?;
+    crate::debug_log!("INFO", "Cofre de hosts e pontes salvo e criptografado (AES-256-GCM) em '{}'", path.display());
     
     Ok(())
 }
@@ -155,23 +156,28 @@ pub fn save_config(config: &AppConfig) -> Result<(), String> {
 pub fn load_config() -> AppConfig {
     let path = get_config_path();
     if !path.exists() {
+        crate::debug_log!("INFO", "Arquivo de cofre de hosts '{}' não existe ainda. Inicializando vazio.", path.display());
         return AppConfig::default();
     }
 
     let encrypted_data = match fs::read(&path) {
         Ok(data) => data,
-        Err(_) => return AppConfig::default(),
+        Err(e) => {
+            crate::debug_log!("ERROR", "Falha ao ler cofre de hosts '{}': {}", path.display(), e);
+            return AppConfig::default();
+        }
     };
 
     match crypto::decrypt_data(&encrypted_data) {
         Ok(plaintext_zeroing) => {
             // plaintext_zeroing é Zeroizing<Vec<u8>>; após from_slice, os bytes
             // serão zerizados ao sair deste escopo.
-            let config = serde_json::from_slice(&plaintext_zeroing).unwrap_or_default();
+            let config: AppConfig = serde_json::from_slice(&plaintext_zeroing).unwrap_or_default();
+            crate::debug_log!("INFO", "Cofre de hosts descriptografado com sucesso ({} hosts, {} pontes)", config.root_nodes.len(), config.bridges.len());
             config // plaintext_zeroing zerado aqui (drop)
         }
         Err(e) => {
-            eprintln!("Erro ao carregar configurações: {}", e);
+            crate::debug_log!("ERROR", "Erro ao descriptografar cofre de hosts: {}", e);
             AppConfig::default()
         }
     }

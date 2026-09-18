@@ -113,7 +113,8 @@ pub fn get_client_config_path() -> PathBuf {
 pub fn save_client_config(config: &ClientConfig) -> Result<(), String> {
     let json_bytes = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
     let path = get_client_config_path();
-    fs::write(path, json_bytes).map_err(|e| e.to_string())?;
+    fs::write(&path, json_bytes).map_err(|e| e.to_string())?;
+    crate::debug_log!("INFO", "Configuração do cliente salva com sucesso em '{}'", path.display());
     Ok(())
 }
 
@@ -131,6 +132,7 @@ pub fn load_client_config() -> ClientConfig {
     
     PERFORMANCE_MODE.store(cfg.performance_mode, Ordering::Relaxed);
     DEBUG_MODE.store(cfg.debug_mode, Ordering::Relaxed);
+    crate::debug_log!("INFO", "Configuração do cliente carregada (debug_mode: {}, experimental_webview: {})", cfg.debug_mode, cfg.experimental_webview_ui);
     cfg
 }
 
