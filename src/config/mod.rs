@@ -2,6 +2,7 @@ pub mod crypto;
 pub mod client;
 pub mod protected_mem;
 
+#[allow(unused_imports)]
 pub use client::{ClientConfig, load_client_config, save_client_config};
 
 use serde::{Deserialize, Serialize};
@@ -59,6 +60,8 @@ pub struct HostProfile {
     /// DH-group1-SHA1 é criptograficamente fraco. Use apenas quando necessário.
     #[serde(default)]
     pub legacy_ssh: bool,
+    #[serde(default)]
+    pub icon: Option<String>,
 }
 
 /// Um perfil de ponte (bridge) salva
@@ -180,5 +183,107 @@ pub fn load_config() -> AppConfig {
             crate::debug_log!("ERROR", "Erro ao descriptografar cofre de hosts: {}", e);
             AppConfig::default()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_host_profile_icon_backward_compatibility() {
+        // Testando JSON legado sem a propriedade "icon"
+        let legacy_json = r#"{
+            "name": "Legado",
+            "address": "192.168.1.100",
+            "port": 22,
+            "username": "root",
+            "auth": { "type": "None" },
+            "enable_icmp": true,
+            "bridge_id": null,
+            "legacy_ssh": false
+        }"#;
+
+        let host: HostProfile = serde_json::from_str(legacy_json).expect("Deve desserializar JSON legado");
+        assert_eq!(host.name, "Legado");
+        assert_eq!(host.icon, None, "Host legado deve ter icon como None");
+
+        // Serialização e re-desserialização preservando None
+        let serialized = serde_json::to_string(&host).expect("Deve serializar host");
+        let re_parsed: HostProfile = serde_json::from_str(&serialized).expect("Deve desserializar");
+        assert_eq!(re_parsed.icon, None);
+    }
+
+    #[test]
+    fn test_host_profile_icon_custom_field() {
+        let json_with_icon = r#"{
+            "name": "Servidor IA",
+            "address": "10.0.0.50",
+            "port": 2222,
+            "username": "developer",
+            "auth": { "type": "None" },
+            "enable_icmp": false,
+            "bridge_id": null,
+            "legacy_ssh": true,
+            "icon": "gpu"
+        }"#;
+
+        let host: HostProfile = serde_json::from_str(json_with_icon).expect("Deve desserializar host com icon");
+        assert_eq!(host.name, "Servidor IA");
+        assert_eq!(host.icon, Some("gpu".to_string()));
+
+        let serialized = serde_json::to_string(&host).expect("Deve serializar host com icon");
+        assert!(serialized.contains(r#""icon":"gpu""#));
+    }
+
+    #[test]
+    fn test_reorder_hosts_and_deletion_lifecycle() {
+        let mut config = AppConfig::default();
+
+        let host_a = HostProfile {
+            name: "Host A".into(), address: "1.1.1.1".into(), port: 22, username: "u1".into(),
+            auth: AuthType::None, enable_icmp: true, bridge_id: None, legacy_ssh: false,
+            icon: Some("terminal".into()),
+        };
+        let host_b = HostProfile {
+            name: "Host B".into(), address: "2.2.2.2".into(), port: 22, username: "u2".into(),
+            auth: AuthType::None, enable_icmp: true, bridge_id: None, legacy_ssh: false,
+            icon: Some("server".into()),
+        };
+        let host_c = HostProfile {
+            name: "Host C".into(), address: "3.3.3.3".into(), port: 22, username: "u3".into(),
+            auth: AuthType::None, enable_icmp: true, bridge_id: None, legacy_ssh: false,
+            icon: Some("gpu".into()),
+        };
+
+        config.root_nodes.push(ConfigNode::Host(host_a));
+        config.root_nodes.push(ConfigNode::Host(host_b));
+        config.root_nodes.push(ConfigNode::Host(host_c));
+
+        assert_eq!(config.root_nodes.len(), 3);
+
+        // 1. Reordenar: mover Host A (índice 0) para o fim (índice 2)
+        let from = 0;
+        let to = 2;
+        let moved = config.root_nodes.remove(from);
+        config.root_nodes.insert(to, moved);
+
+        let names: Vec<String> = config.root_nodes.iter().map(|n| match n {
+            ConfigNode::Host(h) => h.name.clone(),
+            _ => String::new(),
+        }).collect();
+
+        assert_eq!(names, vec!["Host B", "Host C", "Host A"]);
+
+        // 2. Deletar host do meio (Host C, agora no índice 1)
+        config.root_nodes.remove(1);
+
+        let names_after_delete: Vec<String> = config.root_nodes.iter().map(|n| match n {
+            ConfigNode::Host(h) => h.name.clone(),
+            _ => String::new(),
+        }).collect();
+
+        assert_eq!(names_after_delete, vec!["Host B", "Host A"]);
+        assert_eq!(config.root_nodes.len(), 2);
     }
 }

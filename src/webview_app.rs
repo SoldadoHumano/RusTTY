@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use winit::{
     event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
+    event_loop::{ControlFlow, EventLoopBuilder},
     window::WindowBuilder,
 };
 use wry::{WebView, WebViewBuilder, http::Response};
@@ -54,6 +54,7 @@ struct WebviewState {
     config: AppConfig,
     client_config: ClientConfig,
     active_terminals: HashMap<String, std::process::Child>,
+    #[allow(dead_code)]
     ws_tx: broadcast::Sender<String>,
 }
 
@@ -92,6 +93,7 @@ fn serialize_hosts(config: &AppConfig) -> Vec<Value> {
                 "enable_icmp": h.enable_icmp,
                 "bridge_id": h.bridge_id.map(|id| id.to_string()),
                 "legacy_ssh": h.legacy_ssh,
+                "icon": h.icon.clone().unwrap_or_else(|| "terminal".to_string()),
                 "allow_domain": h.address.parse::<std::net::IpAddr>().is_err(),
             }))
         } else {
@@ -127,14 +129,11 @@ fn serialize_client_config(cc: &ClientConfig) -> Value {
         "performance_mode": cc.performance_mode,
         "global_icmp": cc.global_icmp,
         "scroll_lines": cc.scroll_lines,
-        "command_palette_key": cc.command_palette_key.to_string(),
         "enable_customization": cc.enable_customization,
         "allow_multiple_access_to_same_host": cc.allow_multiple_access_to_same_host,
         "enable_auto_update": cc.enable_auto_update,
         "terminal_font_size": cc.terminal_font_size,
         "debug_mode": cc.debug_mode,
-        "antialiasing": cc.antialiasing,
-        "experimental_webview_ui": cc.experimental_webview_ui,
         "customization_data": {
             "ipv4": ipv4,
             "ipv6": ipv6,
@@ -296,14 +295,15 @@ fn handle_ipc_message(
             let allow_domain = data.get("allow_domain").and_then(|v| v.as_bool()).unwrap_or(false);
             let enable_icmp = data.get("enable_icmp").and_then(|v| v.as_bool()).unwrap_or(true);
             let legacy_ssh = data.get("legacy_ssh").and_then(|v| v.as_bool()).unwrap_or(false);
+            let icon = data.get("icon").and_then(|v| v.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
             let bridge_id_str = data.get("bridge_id").and_then(|v| v.as_str());
             let bridge_id = bridge_id_str.and_then(|s| uuid::Uuid::parse_str(s).ok());
             let edit_index = parsed.get("edit_index").and_then(|v| v.as_u64()).map(|v| v as usize);
 
             crate::debug_log!(
                 "INFO",
-                "Webview IPC: Salvando host '{}' ({}:{}, usuário: '{}', allow_domain: {}, icmp: {}, legacy: {})",
-                name, address, port, username, allow_domain, enable_icmp, legacy_ssh
+                "Webview IPC: Salvando host '{}' ({}:{}, usuário: '{}', allow_domain: {}, icmp: {}, legacy: {}, icon: {:?})",
+                name, address, port, username, allow_domain, enable_icmp, legacy_ssh, icon
             );
 
             // Validação
@@ -337,6 +337,7 @@ fn handle_ipc_message(
                 enable_icmp,
                 bridge_id,
                 legacy_ssh,
+                icon,
             };
 
             let mut st = state.lock().unwrap();
@@ -391,6 +392,57 @@ fn handle_ipc_message(
                         send_success(webview, ws_tx, "Host removido.");
                     }
                     Err(e) => send_error(webview, ws_tx, &format!("Erro ao salvar: {}", e)),
+                }
+            }
+        }
+
+        "reorder_hosts" => {
+            let mut st = state.lock().unwrap();
+            let mut changed = false;
+
+            if let (Some(from), Some(to)) = (
+                parsed.get("from_index").and_then(|v| v.as_u64()).map(|v| v as usize),
+                parsed.get("to_index").and_then(|v| v.as_u64()).map(|v| v as usize),
+            ) {
+                if from < st.config.root_nodes.len() && to < st.config.root_nodes.len() && from != to {
+                    let item = st.config.root_nodes.remove(from);
+                    st.config.root_nodes.insert(to, item);
+                    changed = true;
+                }
+            } else if let Some(order) = parsed.get("order").and_then(|v| v.as_array()) {
+                let indices: Vec<usize> = order.iter().filter_map(|v| v.as_u64().map(|i| i as usize)).collect();
+                if indices.len() == st.config.root_nodes.len() {
+                    let old_nodes = std::mem::take(&mut st.config.root_nodes);
+                    let mut new_nodes = Vec::with_capacity(indices.len());
+                    let mut valid = true;
+                    for &idx in &indices {
+                        if idx < old_nodes.len() {
+                            new_nodes.push(old_nodes[idx].clone());
+                        } else {
+                            valid = false;
+                            break;
+                        }
+                    }
+                    if valid && new_nodes.len() == old_nodes.len() {
+                        st.config.root_nodes = new_nodes;
+                        changed = true;
+                    } else {
+                        st.config.root_nodes = old_nodes;
+                    }
+                }
+            }
+
+            if changed {
+                match save_config(&st.config) {
+                    Ok(()) => {
+                        crate::debug_log!("INFO", "Webview IPC: Ordem dos hosts atualizada e persistida com sucesso");
+                        send_to_frontend(webview, ws_tx, &json!({
+                            "type": "config_data",
+                            "hosts": serialize_hosts(&st.config),
+                            "bridges": serialize_bridges(&st.config),
+                        }));
+                    }
+                    Err(e) => send_error(webview, ws_tx, &format!("Erro ao salvar nova ordem dos hosts: {}", e)),
                 }
             }
         }
@@ -681,11 +733,6 @@ fn handle_ipc_message(
                         cc.terminal_font_size = v.clamp(1, 22);
                     }
                 }
-                "command_palette_key" => {
-                    if let Some(ch) = value.and_then(|v| v.as_str()).and_then(|s| s.chars().next()) {
-                        cc.command_palette_key = ch;
-                    }
-                }
                 "performance_mode" => {
                     if let Some(v) = value.and_then(|v| v.as_bool()) {
                         cc.performance_mode = v;
@@ -713,12 +760,6 @@ fn handle_ipc_message(
                             crate::debug::spawn_debug_terminal();
                         }
                     }
-                }
-                "antialiasing" => {
-                    if let Some(v) = value.and_then(|v| v.as_bool()) { cc.antialiasing = v; }
-                }
-                "experimental_webview_ui" => {
-                    if let Some(v) = value.and_then(|v| v.as_bool()) { cc.experimental_webview_ui = v; }
                 }
                 _ => {}
             }
@@ -906,18 +947,85 @@ fn handle_ipc_message(
     }
 }
 
+// ─── Diretório de Dados do Webview ───────────────────────────────────────────
+
+/// Retorna o diretório de dados persistentes do WebView2 (cache, cookies, local storage),
+/// mantendo-o estritamente isolado dentro de `%APPDATA%\ByVitor\RusTTY\webview_data`.
+pub fn get_webview_data_dir() -> std::path::PathBuf {
+    // Limpeza de pastas residuais antigas deixadas ao lado do binário ou no diretório de trabalho
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let stale = exe_dir.join("rustty.exe.WebView2");
+            if stale.exists() {
+                let _ = std::fs::remove_dir_all(&stale);
+            }
+        }
+    }
+    let stale_cwd = std::path::Path::new("rustty.exe.WebView2");
+    if stale_cwd.exists() {
+        let _ = std::fs::remove_dir_all(stale_cwd);
+    }
+
+    let mut path = dirs::config_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+    path.push("ByVitor");
+    path.push("RusTTY");
+    path.push("webview_data");
+    let _ = std::fs::create_dir_all(&path);
+    path
+}
+
+fn load_winit_window_icon() -> Option<winit::window::Icon> {
+    let icon_bytes = include_bytes!("../assets/images/iconv2.png");
+    let img = image::load_from_memory(icon_bytes).ok()?;
+    let rgba = img.into_rgba8();
+    let (width, height) = rgba.dimensions();
+    winit::window::Icon::from_rgba(rgba.into_raw(), width, height).ok()
+}
+
 // ─── Entry Point ─────────────────────────────────────────────────────────────
 
-pub fn run() -> iced::Result {
+pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let event_loop = EventLoopBuilder::<String>::with_user_event().build().unwrap();
     let proxy = event_loop.create_proxy();
     
-    let window = WindowBuilder::new()
+    let window_icon = load_winit_window_icon();
+    let mut window_builder = WindowBuilder::new()
         .with_title("RusTTY")
         .with_inner_size(winit::dpi::LogicalSize::new(900.0, 640.0))
-        .with_min_inner_size(winit::dpi::LogicalSize::new(640.0, 420.0))
+        .with_min_inner_size(winit::dpi::LogicalSize::new(640.0, 420.0));
+
+    if let Some(icon) = window_icon {
+        window_builder = window_builder.with_window_icon(Some(icon));
+    }
+
+    let window = window_builder
         .build(&event_loop)
         .unwrap();
+
+    #[cfg(windows)]
+    {
+        use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        if let Ok(handle) = window.window_handle() {
+            if let RawWindowHandle::Win32(win32_handle) = handle.as_raw() {
+                let hwnd = windows::Win32::Foundation::HWND(win32_handle.hwnd.get() as _);
+                unsafe {
+                    use windows::Win32::UI::WindowsAndMessaging::{
+                        SendMessageW, WM_SETICON, ICON_BIG, ICON_SMALL, LoadIconW,
+                    };
+                    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+                    use windows::core::PCWSTR;
+
+                    if let Ok(hinstance) = GetModuleHandleW(None) {
+                        let hicon = LoadIconW(hinstance, PCWSTR(1 as _)).unwrap_or_default();
+                        if !hicon.is_invalid() {
+                            SendMessageW(hwnd, WM_SETICON, windows::Win32::Foundation::WPARAM(ICON_BIG as _), windows::Win32::Foundation::LPARAM(hicon.0 as _));
+                            SendMessageW(hwnd, WM_SETICON, windows::Win32::Foundation::WPARAM(ICON_SMALL as _), windows::Win32::Foundation::LPARAM(hicon.0 as _));
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // ── WebSocket Server (Live Real-Time Communication) ───────────────────────
     let (ws_tx, _) = broadcast::channel::<String>(256);
@@ -988,8 +1096,37 @@ pub fn run() -> iced::Result {
     let shared_state = Arc::new(Mutex::new(WebviewState::new(ws_tx.clone())));
     let ipc_state = Arc::clone(&shared_state);
 
-    // ── Webview ──────────────────────────────────────────────────────────────
+    let disable_browser_keys_js = r#"
+        window.addEventListener('keydown', function(e) {
+            if (e.key === 'F12' || e.keyCode === 123 || e.key === 'F7' || e.keyCode === 118 || e.key === 'F5') {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            if (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].indexOf(e.key) !== -1) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            if (e.ctrlKey && ['u', 'U', 's', 'S', 'p', 'P', 'r', 'R'].indexOf(e.key) !== -1) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        }, true);
+        window.addEventListener('contextmenu', function(e) {
+            if (!e.target.closest('#context-menu') && !e.target.closest('.host-card') && !e.target.closest('.host-item') && !e.target.closest('.bridge-item')) {
+                e.preventDefault();
+            }
+        }, false);
+    "#;
+
+    let webview_data_dir = get_webview_data_dir();
+    let mut web_context = wry::WebContext::new(Some(webview_data_dir));
     let webview = WebViewBuilder::new(&window)
+        .with_web_context(&mut web_context)
+        .with_devtools(false)
+        .with_initialization_script(disable_browser_keys_js)
         .with_custom_protocol("rustty".into(), move |request| {
             let path = request.uri().path();
             match path {
@@ -1036,7 +1173,9 @@ pub fn run() -> iced::Result {
         if crate::update::check_and_clear_update_flag() {
             let update_msg = json!({
                 "type": "update_notification",
-                "message": "RusTTY foi atualizado com sucesso!"
+                "title": "RusTTY foi Atualizado!",
+                "message": "RusTTY foi atualizado com sucesso para a versão mais recente!",
+                "version": self_update::cargo_crate_version!()
             });
             let ws_tx_update = ws_tx.clone();
             std::thread::spawn(move || {
@@ -1046,7 +1185,17 @@ pub fn run() -> iced::Result {
         }
         if st.client_config.enable_auto_update {
             std::thread::spawn(move || {
-                let _ = crate::update::check_and_apply_update();
+                match crate::update::check_and_apply_update() {
+                    Ok(true) => {
+                        crate::debug_log!("INFO", "Webview: Atualização em segundo plano baixada e aplicada para a próxima inicialização.");
+                    }
+                    Ok(false) => {
+                        crate::debug_log!("INFO", "Webview: RusTTY já está na versão mais recente.");
+                    }
+                    Err(e) => {
+                        crate::debug_log!("WARN", "Webview: Falha ao verificar/aplicar atualização: {}", e);
+                    }
+                }
             });
         }
     }

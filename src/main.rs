@@ -1,45 +1,39 @@
-//! Ponto de entrada do RusTTY.
+//! Ponto de entrada do RusTTY v2.0.0.
 //!
 //! # Modos de Operação
 //!
 //! ```text
-//! rustty                       → Abre o gerenciador de conexões (RusTTYApp)
-//! rustty --terminal <host>     → Abre janela de terminal SSH para o host (TerminalApp)
+//! rustty                       → Abre a interface principal moderna (Webview UI)
+//! rustty --terminal <host>     → Abre terminal SSH nativo Win32 DirectWrite
 //! ```
-//!
-//! O roteamento por args permite que o gerenciador spawne janelas de terminal
-//! independentes sem exigir multi-janela no mesmo processo, contornando a
-//! limitação do Iced 0.12.
 
 #![windows_subsystem = "windows"]
 
-mod app;
 mod config;
 mod debug;
 mod net;
 mod terminal;
-mod terminal_app;
-mod ui;
 mod update;
 mod webview_app;
 
-use iced::{Application, Settings};
-use app::RusTTYApp;
-use terminal_app::run_terminal;
+use terminal::TerminalInit;
 
-fn main() -> iced::Result {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Carrega configurações do cliente para verificar debug_mode antes de qualquer operação
     let _client_cfg = config::client::load_client_config();
 
     let args: Vec<String> = std::env::args().collect();
     let is_child = std::env::var("RUSTTY_CHILD").is_ok()
-        || args.iter().any(|a| a == "--terminal" || a == "--quick-ssh" || a == "--bridge-terminal");
+        || args.iter().any(|a| {
+            a == "--terminal" || a == "--quick-ssh" || a == "--bridge-terminal"
+                || a == "--win32-terminal" || a == "--win32-quick-ssh" || a == "--win32-bridge-terminal"
+        });
 
     // Inicializa logger debug (anexa se for processo filho, trunca se for o gerenciador principal)
     debug::init_debug_logger(is_child);
     debug_log!(
         "INFO",
-        "Processo RusTTY iniciado (PID: {}, role: {}, args: {:?})",
+        "Processo RusTTY v2.0.0 iniciado (PID: {}, role: {}, args: {:?})",
         std::process::id(),
         if is_child { "Terminal/SSH Child" } else { "Manager" },
         args
@@ -50,55 +44,45 @@ fn main() -> iced::Result {
         debug::spawn_debug_terminal();
     }
 
-    // Detecta modo terminal salvo: `rustty --terminal <host_name>`
-    if let Some(pos) = args.iter().position(|a| a == "--terminal") {
+    // Detecta modo terminal salvo: `rustty --terminal <host_name>` ou `rustty --win32-terminal <host_name>`
+    if let Some(pos) = args.iter().position(|a| a == "--terminal" || a == "--win32-terminal") {
         let host_name = args.get(pos + 1).cloned().unwrap_or_default();
-        debug_log!("INFO", "Roteando para Terminal Salvo: host='{}'", host_name);
-        return run_terminal(terminal_app::TerminalInit::SavedHost(host_name));
+        debug_log!("INFO", "Roteando para Terminal Win32: host='{}'", host_name);
+        #[cfg(windows)]
+        terminal::win32::run_win32_terminal(TerminalInit::SavedHost(host_name))?;
+        return Ok(());
     }
 
-    // Detecta modo Quick Connect: `rustty --quick-ssh <address> <port> <user> <pass>`
-    if let Some(pos) = args.iter().position(|a| a == "--quick-ssh") {
+    // Detecta modo Quick Connect: `rustty --quick-ssh ...` ou `rustty --win32-quick-ssh ...`
+    if let Some(pos) = args.iter().position(|a| a == "--quick-ssh" || a == "--win32-quick-ssh") {
         let address = args.get(pos + 1).cloned().unwrap_or_default();
         let port = args.get(pos + 2).and_then(|p| p.parse().ok()).unwrap_or(22);
         let user = args.get(pos + 3).cloned().unwrap_or_default();
         let pass = args.get(pos + 4).cloned().unwrap_or_else(|| "none".to_string());
         
-        debug_log!("INFO", "Roteando para Quick SSH: {}@{}:{}", user, address, port);
-        return run_terminal(terminal_app::TerminalInit::QuickSsh {
+        debug_log!("INFO", "Roteando para Quick SSH Win32: {}@{}:{}", user, address, port);
+        let init = TerminalInit::QuickSsh {
             address,
             port,
             user,
             pass,
-        });
+        };
+        #[cfg(windows)]
+        terminal::win32::run_win32_terminal(init)?;
+        return Ok(());
     }
 
-    // Detecta modo bridge: `rustty --bridge-terminal <id>`
-    if let Some(pos) = args.iter().position(|a| a == "--bridge-terminal") {
+    // Detecta modo bridge: `rustty --bridge-terminal <id>` ou `rustty --win32-bridge-terminal <id>`
+    if let Some(pos) = args.iter().position(|a| a == "--bridge-terminal" || a == "--win32-bridge-terminal") {
         let id_str = args.get(pos + 1).cloned().unwrap_or_default();
-        debug_log!("INFO", "Roteando para Bridge Terminal: id='{}'", id_str);
-        return run_terminal(terminal_app::TerminalInit::Bridge(id_str));
+        debug_log!("INFO", "Roteando para Bridge Terminal Win32: id='{}'", id_str);
+        let init = TerminalInit::Bridge(id_str);
+        #[cfg(windows)]
+        terminal::win32::run_win32_terminal(init)?;
+        return Ok(());
     }
 
-    // Modo padrão: gerenciador de conexões
-    if _client_cfg.experimental_webview_ui {
-        debug_log!("INFO", "Iniciando Gerenciador RusTTY com interface Webview UI");
-        return webview_app::run();
-    }
-
-    debug_log!("INFO", "Iniciando Gerenciador RusTTY com interface Iced Nativa");
-
-    RusTTYApp::run(Settings {
-        // Registra a fonte Lucide para que o renderer possa exibir os ícones.
-        // O TTF está embutido no binário via include_bytes! em ui::icons.
-        fonts: vec![],
-        window: iced::window::Settings {
-            size: iced::Size::new(800.0, 600.0),
-            min_size: Some(iced::Size::new(600.0, 400.0)),
-            icon: crate::ui::icons::load_window_icon(),
-            ..iced::window::Settings::default()
-        },
-        antialiasing: _client_cfg.antialiasing,
-        ..Settings::default()
-    })
+    // Modo padrão: Gerenciador de conexões via Webview UI
+    debug_log!("INFO", "Iniciando Gerenciador RusTTY v2.0.0 com interface Webview UI");
+    webview_app::run()
 }

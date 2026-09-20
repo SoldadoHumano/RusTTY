@@ -1,7 +1,6 @@
 use image::ImageFormat;
 use std::env;
 use std::fs::File;
-use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rerun-if-changed=assets/images/iconv2.png");
@@ -19,9 +18,14 @@ fn main() {
             resized.write_to(&mut file, ImageFormat::Ico)
                 .expect("Falha ao escrever o .ico");
 
-            // Embutir o .ico no executável do Windows
+            // Embutir o .ico e metadados no executável do Windows
             let mut res = winres::WindowsResource::new();
             res.set_icon(ico_path);
+            res.set("ProductName", "RusTTY");
+            res.set("FileDescription", "RusTTY SSH Client & Terminal");
+            res.set("LegalCopyright", "Copyright (c) 2026 Vitor");
+            res.set("FileVersion", "2.0.0.0");
+            res.set("ProductVersion", "2.0.0.0");
             if let Err(e) = res.compile() {
                 eprintln!("Aviso: Falha ao embutir o ícone no .exe (winres): {}", e);
             }

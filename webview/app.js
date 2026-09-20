@@ -3,9 +3,12 @@
 
 'use strict';
 
-//  Lucide SVG Icon Paths (embedded, no CDN) 
+
+// ─── Lucide SVG Icon Paths (embedded, no CDN) ────────────────────────────────
 const ICON_PATHS = {
   home: '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  sparkles: '<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/>',
+  rocket: '<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>',
   server: '<rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/>',
   'server-plus': '<rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/><path d="M16 6h4"/><path d="M18 4v4"/>',
   network: '<rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/>',
@@ -34,10 +37,46 @@ const ICON_PATHS = {
   globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
   'chevron-right': '<path d="m9 18 6-6-6-6"/>',
-  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.34-4.34"/>',
+  'folder-search': '<path d="M10.7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v4.1"/><path d="m21 21-1.9-1.9"/><circle cx="17" cy="17" r="3"/>',
+  'book-search': '<path d="M11 22H5.5a1 1 0 0 1 0-5h4.501"/><path d="m21 22-1.879-1.878"/><path d="M3 19.5v-15A2.5 2.5 0 0 1 5.5 2H18a1 1 0 0 1 1 1v8"/><circle cx="17" cy="18" r="3"/>',
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
   'arrow-up-right': '<path d="M7 7h10v10"/><path d="M7 17 17 7"/>',
+  'arrow-right': '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+  'grip-vertical': '<circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/>',
+  cpu: '<path d="M12 20v2"/><path d="M12 2v2"/><path d="M17 20v2"/><path d="M17 2v2"/><path d="M2 12h2"/><path d="M2 17h2"/><path d="M2 7h2"/><path d="M20 12h2"/><path d="M20 17h2"/><path d="M20 7h2"/><path d="M7 20v2"/><path d="M7 2v2"/><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="8" y="8" width="8" height="8" rx="1"/>',
+  gpu: '<path d="M2 17h18a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H2"/><path d="M2 21V3"/><path d="M7 17v3a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-3"/><circle cx="16" cy="11" r="2"/><circle cx="8" cy="11" r="2"/>',
+  'hard-drive': '<path d="M10 16h.01"/><path d="M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M21.946 12.013H2.054"/><path d="M6 16h.01"/>',
+  'memory-stick': '<path d="M12 12v-2"/><path d="M12 18v-2"/><path d="M16 12v-2"/><path d="M16 18v-2"/><path d="M2 11h1.5"/><path d="M20 18v-2"/><path d="M20.5 11H22"/><path d="M4 18v-2"/><path d="M8 12v-2"/><path d="M8 18v-2"/><rect x="2" y="6" width="20" height="10" rx="2"/>',
 };
+
+const HOST_AVAILABLE_ICONS = [
+  { id: 'terminal', label: 'Terminal' },
+  { id: 'server', label: 'Servidor' },
+  { id: 'server-plus', label: 'Cluster' },
+  { id: 'monitor', label: 'Estação' },
+  { id: 'cpu', label: 'CPU' },
+  { id: 'gpu', label: 'GPU / IA' },
+  { id: 'hard-drive', label: 'Storage' },
+  { id: 'memory-stick', label: 'Memória' },
+  { id: 'network', label: 'Rede' },
+  { id: 'globe', label: 'Nuvem' },
+  { id: 'globe-lock', label: 'Gateway' },
+  { id: 'shield', label: 'Firewall' },
+  { id: 'lock', label: 'Bastion' },
+  { id: 'folder', label: 'Arquivos' },
+  { id: 'folder-search', label: 'Documentação' },
+  { id: 'book-search', label: 'Manual' },
+  { id: 'plug', label: 'Dispositivo' },
+  { id: 'rocket', label: 'Produção' },
+  { id: 'save', label: 'Backup' },
+  { id: 'user', label: 'Usuário' },
+];
+
+function getHostIconLabel(id) {
+  const item = HOST_AVAILABLE_ICONS.find(i => i.id === id);
+  return item ? item.label : (id || 'Terminal');
+}
 
 /** Creates an SVG icon element */
 function icon(name, size = 20) {
@@ -119,6 +158,7 @@ const IPC = {
 
   saveHost(data, editIndex) { this.send({ type: 'save_host', data, edit_index: editIndex ?? null }); },
   deleteHost(index) { this.send({ type: 'delete_host', index }); },
+  reorderHosts(fromIndex, toIndex) { this.send({ type: 'reorder_hosts', from_index: fromIndex, to_index: toIndex }); },
   saveBridge(data, editIndex) { this.send({ type: 'save_bridge', data, edit_index: editIndex ?? null }); },
   deleteBridge(index) { this.send({ type: 'delete_bridge', index }); },
 
@@ -148,6 +188,7 @@ window.__rustCallback = function (dataStr) {
 const state = {
   currentView: 'home',
   currentDocPage: null,
+  hostSearchQuery: '',
 
   // Data from Rust
   hosts: [],
@@ -183,7 +224,7 @@ function createHostForm() {
   return {
     name: '', address: '', port: '22', username: '', password: '',
     allowDomain: false, enableIcmp: true, enableBridge: false,
-    selectedBridge: null, legacySsh: false, showPassword: false, error: null
+    selectedBridge: null, legacySsh: false, icon: 'terminal', showPassword: false, error: null
   };
 }
 function createBridgeForm() {
@@ -214,7 +255,7 @@ function handleRustMessage(msg) {
         state.pendingNavigateAfterConfig = null;
         navigate(dest);
       } else {
-        if (state.currentView === 'home') renderView();
+        if (state.currentView === 'home' && !isDraggingHost) renderView();
         if (state.currentView === 'bridges') renderView();
       }
 
@@ -299,7 +340,11 @@ function handleRustMessage(msg) {
       break;
 
     case 'update_notification':
-      Toast.show(msg.message, 'success', 8000);
+      showUpdateCelebrationModal({
+        title: msg.title || 'RusTTY foi Atualizado!',
+        message: msg.message || 'Uma nova versão do RusTTY foi baixada e instalada em segundo plano com sucesso!',
+        version: msg.version || ''
+      });
       break;
   }
 }
@@ -322,6 +367,7 @@ function navigate(view, params = {}) {
         username: host.username, password: '', allowDomain: host.allow_domain || false,
         enableIcmp: host.enable_icmp ?? true, enableBridge: !!host.bridge_id,
         selectedBridge: host.bridge_id || null, legacySsh: host.legacy_ssh || false,
+        icon: host.icon || 'terminal',
         showPassword: false, error: null,
       };
     }
@@ -391,6 +437,10 @@ function navigate(view, params = {}) {
   if (view === 'settings') {
     // Garante dados frescos do backend ao entrar em configurações
     IPC.requestClientConfig();
+  }
+
+  if (view !== 'home') {
+    stopHostSearchAnimation();
   }
 
   renderSidebar();
@@ -467,16 +517,88 @@ function renderView() {
 
 //  View: Home 
 
+// ─── View: Home ──────────────────────────────────────────────────────────────
+
 function viewHome() {
-  const hostCards = state.hosts.length === 0
-    ? `<div class="empty-state">
-         ${icon('server', 48)}
-         <div class="empty-state-title">Nenhum host cadastrado</div>
-         <div class="empty-state-text">Clique em "Novo Host" para adicionar seu primeiro servidor.</div>
-       </div>`
-    : `<div class="host-list">
-         ${state.hosts.map((h, i) => hostCard(h, i)).join('')}
-       </div>`;
+  const query = (state.hostSearchQuery || '').trim().toLowerCase();
+  const hasHosts = state.hosts.length > 0;
+
+  // Filtra por nome ou endereço
+  const filteredHosts = query
+    ? state.hosts.filter(h =>
+      (h.name && h.name.toLowerCase().includes(query)) ||
+      (h.address && h.address.toLowerCase().includes(query))
+    )
+    : state.hosts;
+
+  let hostCardsHtml = '';
+  if (!hasHosts) {
+    hostCardsHtml = `
+      <div class="empty-state">
+        ${icon('server', 48)}
+        <div class="empty-state-title">Nenhum host cadastrado</div>
+        <div class="empty-state-text">Clique em "Novo Host" para adicionar seu primeiro servidor.</div>
+      </div>
+    `;
+  } else if (filteredHosts.length === 0) {
+    hostCardsHtml = `
+      <div class="empty-state animate-fade-in">
+        ${icon('search', 44)}
+        <div class="empty-state-title">Nenhum host encontrado</div>
+        <div class="empty-state-text">Nenhum servidor corresponde à busca "<strong>${escHtml(state.hostSearchQuery)}</strong>".</div>
+        <button type="button" class="btn btn--secondary mt-4" onclick="clearHostSearch()">
+          ${icon('undo', 16)} Limpar Busca
+        </button>
+      </div>
+    `;
+  } else {
+    hostCardsHtml = `
+      <div class="host-list" id="host-list">
+        ${filteredHosts.map(h => hostCard(h, state.hosts.indexOf(h), !!query)).join('')}
+      </div>
+    `;
+  }
+
+  // Barra de busca interativa
+  const searchSection = hasHosts || query ? `
+    <div class="host-search-wrapper">
+      <div class="host-search-container" id="host-search-container">
+        <div class="host-search-icon-box" id="host-search-icon-box" title="Buscar host">
+          <span class="host-search-icon active" data-icon="search">${icon('search', 18)}</span>
+          <span class="host-search-icon" data-icon="folder-search">${icon('folder-search', 18)}</span>
+          <span class="host-search-icon" data-icon="book-search">${icon('book-search', 18)}</span>
+        </div>
+        <div class="host-search-input-wrapper">
+          <input type="text"
+                 class="host-search-input"
+                 id="host-search-input"
+                 value="${escAttr(state.hostSearchQuery || '')}"
+                 oninput="onHostSearchInput(event)"
+                 onfocus="onHostSearchFocus()"
+                 onblur="onHostSearchBlur()"
+                 autocomplete="off"
+                 spellcheck="false"
+                 placeholder="" />
+          <div class="host-search-placeholder ${state.hostSearchQuery ? 'is-hidden' : ''}" id="host-search-placeholder">
+            <span class="host-search-placeholder-prefix">Buscar host </span>
+            <span class="host-search-wave-text" id="host-search-wave-text"></span>
+            <span class="host-search-cursor">|</span>
+          </div>
+        </div>
+        ${state.hostSearchQuery ? `
+          <button type="button" class="host-search-clear-btn" onclick="clearHostSearch()" title="Limpar busca">
+            ${icon('x', 14)}
+          </button>
+        ` : ''}
+      </div>
+      ${query ? `
+        <div class="host-search-meta">
+          <span class="host-search-count">${filteredHosts.length} de ${state.hosts.length} ${state.hosts.length === 1 ? 'host' : 'hosts'}</span>
+          <button type="button" class="host-search-clear-link" onclick="clearHostSearch()">Limpar filtro</button>
+        </div>
+      ` : ''}
+    </div>
+  ` : '';
 
   return `
     <div class="view-inner view-inner--wide">
@@ -484,7 +606,7 @@ function viewHome() {
         <div class="page-header-left">
           <span class="page-title-icon">${icon('server', 28)}</span>
           <div>
-            <h1 class="page-title">Suas Conexões</h1>
+            <h1 class="page-title">Seus Hosts</h1>
             <p class="page-subtitle">Gerencie seus servidores e instâncias.</p>
           </div>
         </div>
@@ -497,12 +619,13 @@ function viewHome() {
           </button>
         </div>
       </div>
-      ${hostCards}
+      ${searchSection}
+      ${hostCardsHtml}
     </div>
   `;
 }
 
-function hostCard(host, index) {
+function hostCard(host, index, isFiltered = false) {
   const icmpState = state.icmpStatus[String(index)];
   let iconClass = '';
   if (host.enable_icmp && state.clientConfig.global_icmp) {
@@ -513,12 +636,24 @@ function hostCard(host, index) {
   const bridgeTag = host.bridge_id
     ? `<span class="bridge-indicator">${icon('network', 12)} Ponte</span>` : '';
 
+  const hostIcon = host.icon || 'terminal';
+  const isDraggable = !isFiltered;
+
   return `
-    <div class="host-item stagger-item" data-host-index="${index}"
-         onclick="IPC.openTerminal('${escAttr(host.name)}')"
+    <div class="host-item stagger-item ${isFiltered ? 'is-filtered' : ''}" data-host-index="${index}" ${isDraggable ? 'draggable="true"' : ''}
+         onclick="onHostCardClick(event, '${escAttr(host.name)}')"
          oncontextmenu="showHostContextMenu(event, ${index})">
+      ${isDraggable ? `
+        <div class="host-drag-handle" title="Arraste para reordenar">
+          ${icon('grip-vertical', 16)}
+        </div>
+      ` : `
+        <div class="host-drag-handle host-drag-handle--disabled" title="Limpe a busca para reorganizar a lista">
+          ${icon('grip-vertical', 16)}
+        </div>
+      `}
       <div class="host-icon-wrapper ${iconClass}">
-        ${icon('terminal', 20)}
+        ${icon(hostIcon, 20)}
       </div>
       <div class="host-info">
         <div class="host-name">${escHtml(host.name)}</div>
@@ -606,6 +741,57 @@ function viewNewHost() {
       </div>
 
       <div class="form-section">
+        <!-- Seletor de Ícone do Host -->
+        <div class="input-group">
+          <label class="input-label">${icon('sparkles', 16)} Ícone do Host</label>
+          <div class="host-icon-picker-container" id="host-icon-picker-container">
+            <button type="button" class="host-icon-selector-trigger" id="host-icon-trigger"
+                    onclick="toggleHostIconMenu(event)" aria-haspopup="true" aria-expanded="false"
+                    title="Clique para escolher outro ícone para este host">
+              <div class="host-icon-current-box" id="host-icon-current-box">
+                ${icon(f.icon || 'terminal', 24)}
+              </div>
+              <div class="host-icon-trigger-info">
+                <div class="host-icon-trigger-title-row">
+                  <span class="host-icon-trigger-name" id="host-icon-current-name">${getHostIconLabel(f.icon || 'terminal')}</span>
+                  <span class="host-icon-trigger-badge">Ícone em uso</span>
+                </div>
+                <span class="host-icon-trigger-hint">Clique para abrir o menu e trocar o ícone</span>
+              </div>
+              <div class="host-icon-trigger-action">
+                <span class="host-icon-trigger-action-text">Alterar</span>
+                <span class="host-icon-trigger-chevron">${icon('chevron-right', 18)}</span>
+              </div>
+            </button>
+
+            <!-- Menu Suspenso Tema Escuro -->
+            <div class="host-icon-dropdown-menu" id="host-icon-menu">
+              <div class="host-icon-menu-header">
+                <div class="host-icon-menu-title">
+                  ${icon('sparkles', 15)}
+                  <span>Escolha um Ícone para o Host</span>
+                </div>
+                <button type="button" class="host-icon-menu-close-btn" onclick="closeHostIconMenu(event)" title="Fechar menu">
+                  ${icon('x', 14)}
+                </button>
+              </div>
+              <div class="host-icon-grid" id="host-icon-grid">
+                ${HOST_AVAILABLE_ICONS.map(item => `
+                  <button type="button" 
+                          class="host-icon-option ${item.id === (f.icon || 'terminal') ? 'selected' : ''}" 
+                          onclick="selectHostIcon('${item.id}', event)"
+                          title="${item.label}">
+                    <div class="host-icon-option-svg-box">
+                      ${icon(item.id, 22)}
+                    </div>
+                    <span class="host-icon-option-label">${item.label}</span>
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="input-group">
           <label class="input-label">${icon('monitor')} Apelido / Nome</label>
           <input class="input" type="text" placeholder="Ex: Servidor Prod"
@@ -679,7 +865,71 @@ function submitHostForm() {
     allow_domain: f.allowDomain, enable_icmp: f.enableBridge ? false : f.enableIcmp,
     bridge_id: f.enableBridge ? f.selectedBridge : null,
     legacy_ssh: f.legacySsh,
+    icon: f.icon || 'terminal',
   }, state.editingHostIndex);
+}
+
+function toggleHostIconMenu(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  const menu = document.getElementById('host-icon-menu');
+  const trigger = document.getElementById('host-icon-trigger');
+  if (!menu) return;
+  const isOpen = menu.classList.contains('is-open');
+  if (isOpen) {
+    closeHostIconMenu();
+  } else {
+    menu.classList.add('is-open');
+    if (trigger) {
+      trigger.classList.add('is-active');
+      trigger.setAttribute('aria-expanded', 'true');
+    }
+  }
+}
+
+function closeHostIconMenu(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  const menu = document.getElementById('host-icon-menu');
+  const trigger = document.getElementById('host-icon-trigger');
+  if (menu) {
+    menu.classList.remove('is-open');
+  }
+  if (trigger) {
+    trigger.classList.remove('is-active');
+    trigger.setAttribute('aria-expanded', 'false');
+  }
+}
+
+function selectHostIcon(iconId, e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  state.hostForm.icon = iconId;
+
+  // Atualiza classe selected na grade do menu
+  const grid = document.getElementById('host-icon-grid');
+  if (grid) {
+    grid.querySelectorAll('.host-icon-option').forEach(btn => {
+      btn.classList.remove('selected');
+    });
+    const clickedBtn = grid.querySelector(`[onclick*="'${iconId}'"]`);
+    if (clickedBtn) clickedBtn.classList.add('selected');
+  }
+
+  // Atualiza caixa e nome no gatilho do ícone atual
+  const currentBox = document.getElementById('host-icon-current-box');
+  const currentName = document.getElementById('host-icon-current-name');
+  if (currentBox) currentBox.innerHTML = icon(iconId, 24);
+  if (currentName) currentName.textContent = getHostIconLabel(iconId);
+
+  // Fecha o menu após a escolha
+  closeHostIconMenu();
 }
 
 //  View: Bridges 
@@ -965,8 +1215,7 @@ function viewSettings() {
              <div class="settings-group mb-6">`;
     for (const s of settings) {
       const val = c[s.key] !== undefined ? c[s.key] : false;
-      const webviewBadge = s.webview_only ? '<span class="badge badge--sm badge--warning ml-2" style="font-size:0.6rem; padding: 2px 4px; vertical-align: middle;">WEBVIEW EXCLUSIVO</span>' : '';
-      const labelHtml = s.label + webviewBadge;
+      const labelHtml = s.label;
 
       if (s.setting_type === 'boolean') {
         html += settingsToggleRow(labelHtml, s.description, s.key, val);
@@ -985,8 +1234,8 @@ function viewSettings() {
       <div class="settings-group mb-6">
         <div class="about-grid">
           ${aboutRow('Nome do Cliente', 'RusTTY')}
-          ${aboutRow('Versão do Cliente', 'v1.2.0')}
-          ${aboutRow('Data da Versão', '18/09/2026')}
+          ${aboutRow('Versão do Cliente', 'v2.0.0')}
+          ${aboutRow('Data da Versão', '19/09/2026')}
           ${aboutRow('Licença', 'GNU Affero General Public License v3')}
           ${aboutRow('Desenvolvedor', 'Vitor')}
           ${aboutRow('Co-desenvolvedor', ' ')}
@@ -1120,7 +1369,7 @@ function viewCustomizationList() {
         </div>
       </div>
 
-      <div class="settings-group-title">PADR�"ES DE SISTEMA</div>
+      <div class="settings-group-title">PADRÕES DE SISTEMA</div>
       <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px">
         <div class="customization-item" onclick="navigate('customization', { mode: 'edit-ipv4' })" style="cursor:pointer">
           <div class="customization-item-icon" style="background: rgba(255,115,0,0.08); color: var(--color-accent)">
@@ -1444,12 +1693,210 @@ function toggleSetting(key, isChecked) {
 function showModal(html) {
   const overlay = document.getElementById('modal-overlay');
   const content = document.getElementById('modal-content');
+  if (!overlay || !content) return;
+  content.className = 'modal-content';
   content.innerHTML = html;
   overlay.classList.add('visible');
 }
 
 function hideModal() {
-  document.getElementById('modal-overlay').classList.remove('visible');
+  const overlay = document.getElementById('modal-overlay');
+  const content = document.getElementById('modal-content');
+  if (overlay) overlay.classList.remove('visible');
+  stopCelebrationConfetti();
+  setTimeout(() => {
+    if (content) {
+      content.className = 'modal-content';
+      content.innerHTML = '';
+    }
+  }, 250);
+}
+
+// ─── Celebration Confetti System ─────────────────────────────────────────────
+let confettiAnimId = null;
+let confettiParticles = [];
+
+function launchCelebrationConfetti(count = 65) {
+  let canvas = document.getElementById('celebration-confetti-canvas');
+  if (!canvas) {
+    canvas = document.createElement('canvas');
+    canvas.id = 'celebration-confetti-canvas';
+    canvas.className = 'celebration-confetti-canvas';
+    document.body.appendChild(canvas);
+  }
+
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const colors = [
+    '#FF3B30', // Vermelho
+    '#FF453A',
+    '#FFCC00', // Amarelo
+    '#FFD60A',
+    '#007AFF', // Azul
+    '#0A84FF',
+    '#34C759', // Verde
+    '#30D158'
+  ];
+
+  const originX = window.innerWidth / 2;
+  const originY = window.innerHeight * 0.45;
+
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 4 + Math.random() * 9;
+    confettiParticles.push({
+      x: originX + (Math.random() - 0.5) * 80,
+      y: originY + (Math.random() - 0.5) * 40,
+      vx: Math.cos(angle) * speed * (0.8 + Math.random() * 0.5),
+      vy: Math.sin(angle) * speed - (3 + Math.random() * 4),
+      size: 5 + Math.random() * 7,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      rotation: Math.random() * 360,
+      rotationSpeed: (Math.random() - 0.5) * 12,
+      shape: Math.random() > 0.4 ? 'rect' : 'circle',
+      opacity: 1,
+      decay: 0.008 + Math.random() * 0.012,
+      gravity: 0.18 + Math.random() * 0.08,
+      wobble: Math.random() * 10,
+    });
+  }
+
+  if (!confettiAnimId) {
+    animateConfetti(canvas, ctx);
+  }
+}
+
+function animateConfetti(canvas, ctx) {
+  ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+  for (let i = confettiParticles.length - 1; i >= 0; i--) {
+    const p = confettiParticles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += p.gravity;
+    p.vx *= 0.985;
+    p.rotation += p.rotationSpeed;
+    p.opacity -= p.decay;
+    p.wobble += 0.1;
+
+    if (p.opacity <= 0 || p.y > window.innerHeight + 50) {
+      confettiParticles.splice(i, 1);
+      continue;
+    }
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, p.opacity);
+    ctx.translate(p.x + Math.sin(p.wobble) * 2, p.y);
+    ctx.rotate((p.rotation * Math.PI) / 180);
+    ctx.fillStyle = p.color;
+
+    if (p.shape === 'rect') {
+      ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * (0.6 + Math.cos(p.wobble) * 0.4));
+    } else {
+      ctx.beginPath();
+      ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  if (confettiParticles.length > 0) {
+    confettiAnimId = requestAnimationFrame(() => animateConfetti(canvas, ctx));
+  } else {
+    confettiAnimId = null;
+    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    if (canvas && canvas.parentNode) {
+      canvas.parentNode.removeChild(canvas);
+    }
+  }
+}
+
+function stopCelebrationConfetti() {
+  if (confettiAnimId) {
+    cancelAnimationFrame(confettiAnimId);
+    confettiAnimId = null;
+  }
+  confettiParticles = [];
+  const canvas = document.getElementById('celebration-confetti-canvas');
+  if (canvas && canvas.parentNode) {
+    canvas.parentNode.removeChild(canvas);
+  }
+}
+
+// ─── Celebration Modal Trigger ───────────────────────────────────────────────
+function showUpdateCelebrationModal(options = {}) {
+  const title = options.title || 'RusTTY foi Atualizado!';
+  const message = options.message || 'Uma nova versão do RusTTY foi baixada e instalada silenciosamente em segundo plano. Suas conexões e configurações estão seguras e prontas para voar!';
+  const version = options.version || '1.2.0';
+
+  const overlay = document.getElementById('modal-overlay');
+  const content = document.getElementById('modal-content');
+  if (!overlay || !content) return;
+
+  content.className = 'modal-content modal-content--celebration';
+
+  const formattedVersion = version ? (version.startsWith('v') ? version : `v${version}`) : 'v1.2.0';
+
+  content.innerHTML = `
+    <div class="update-celebration-wrapper">
+      <div class="update-celebration-card" id="update-celebration-card">
+        <button type="button" class="update-celebration-close" onclick="hideModal()" title="Fechar (ESC)">
+          ${icon('x', 15)}
+        </button>
+
+        <div class="update-celebration-badge">
+          <span class="update-badge-icon">${icon('sparkles', 13)}</span>
+          <span>Atualização Concluída</span>
+        </div>
+
+        <div class="update-celebration-hero">
+          <div class="update-celebration-hero-icon">
+            ${icon('rocket', 30)}
+          </div>
+        </div>
+
+        <h2 class="update-celebration-title">${escHtml(title)}</h2>
+
+        <div class="update-celebration-meta">
+          <span class="update-version-chip">${icon('check', 11)} ${escHtml(formattedVersion)}</span>
+          <span class="update-meta-sep">•</span>
+          <span>Instalada em segundo plano</span>
+        </div>
+
+        <p class="update-celebration-desc">${escHtml(message)}</p>
+
+        <div class="update-celebration-actions">
+          <button type="button" class="btn--celebrate" id="btn-update-yay" onclick="onCelebrateYayClick()">
+            <span>Yay! Continuar</span>
+            ${icon('arrow-right', 16)}
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  overlay.classList.add('visible');
+  launchCelebrationConfetti(55);
+}
+
+function onCelebrateYayClick() {
+  const btn = document.getElementById('btn-update-yay');
+  if (btn) {
+    btn.style.transform = 'scale(0.96)';
+    setTimeout(() => { if (btn) btn.style.transform = ''; }, 150);
+  }
+
+  // Disparo extra suave ao clicar em Yay!
+  launchCelebrationConfetti(70);
+
+  // Fecha o modal suavemente após curtir a animação
+  setTimeout(() => {
+    hideModal();
+  }, 450);
 }
 
 function confirmDeleteHost(index) {
@@ -1606,6 +2053,371 @@ function bindViewEvents() {
       el.addEventListener('input', applyValue);
     }
   });
+
+  if (state.currentView === 'home') {
+    initHostDragAndDrop();
+    startHostSearchAnimation();
+  } else {
+    stopHostSearchAnimation();
+  }
+}
+
+let isDraggingHost = false;
+let draggedHostIndex = null;
+
+function onHostCardClick(e, hostName) {
+  if (isDraggingHost) return;
+  if (e.target.closest('.host-actions') || e.target.closest('.host-drag-handle')) return;
+  IPC.openTerminal(hostName);
+}
+
+function calculateReorderTargetIndex(fromIndex, targetCardIndex, dropOnBottomHalf) {
+  let targetIndex = targetCardIndex;
+  if (fromIndex < targetCardIndex) {
+    targetIndex = dropOnBottomHalf ? targetCardIndex : targetCardIndex - 1;
+  } else if (fromIndex > targetCardIndex) {
+    targetIndex = dropOnBottomHalf ? targetCardIndex + 1 : targetCardIndex;
+  }
+  return Math.max(0, Math.min(targetIndex, state.hosts.length - 1));
+}
+
+function initHostDragAndDrop() {
+  const hostList = document.getElementById('host-list');
+  if (!hostList) return;
+
+  // Se há filtro ativo, não ativa drag & drop para evitar corromper a ordem global
+  if (state.hostSearchQuery && state.hostSearchQuery.trim()) {
+    return;
+  }
+
+  const items = hostList.querySelectorAll('.host-item');
+  items.forEach(item => {
+    item.addEventListener('dragstart', (e) => {
+      if (e.target.closest('.host-actions') || e.target.closest('button')) {
+        e.preventDefault();
+        return;
+      }
+      draggedHostIndex = parseInt(item.dataset.hostIndex, 10);
+      isDraggingHost = true;
+      item.classList.add('is-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(draggedHostIndex));
+    });
+
+    item.addEventListener('dragend', () => {
+      item.classList.remove('is-dragging');
+      document.querySelectorAll('.host-item').forEach(el => {
+        el.classList.remove('drag-over-top', 'drag-over-bottom');
+      });
+      setTimeout(() => { isDraggingHost = false; }, 150);
+    });
+
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+
+      const targetIndex = parseInt(item.dataset.hostIndex, 10);
+      if (targetIndex === draggedHostIndex) return;
+
+      const rect = item.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+
+      if (e.clientY < midY) {
+        item.classList.add('drag-over-top');
+        item.classList.remove('drag-over-bottom');
+      } else {
+        item.classList.add('drag-over-bottom');
+        item.classList.remove('drag-over-top');
+      }
+    });
+
+    item.addEventListener('dragleave', (e) => {
+      if (!item.contains(e.relatedTarget)) {
+        item.classList.remove('drag-over-top', 'drag-over-bottom');
+      }
+    });
+
+    item.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const fromIndex = draggedHostIndex;
+      const targetIndex = parseInt(item.dataset.hostIndex, 10);
+
+      item.classList.remove('drag-over-top', 'drag-over-bottom');
+
+      if (fromIndex == null || isNaN(fromIndex) || isNaN(targetIndex) || fromIndex === targetIndex) {
+        return;
+      }
+
+      const rect = item.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      const dropOnBottomHalf = e.clientY >= midY;
+      const toIndex = calculateReorderTargetIndex(fromIndex, targetIndex, dropOnBottomHalf);
+
+      if (fromIndex !== toIndex) {
+        // 1. Reordena localmente no array do estado para feedback imediato
+        const [movedHost] = state.hosts.splice(fromIndex, 1);
+        state.hosts.splice(toIndex, 0, movedHost);
+
+        // 2. Renderiza a view com a nova ordem
+        renderView();
+
+        // 3. Notifica o backend para salvar no disco imediatamente
+        IPC.reorderHosts(fromIndex, toIndex);
+      }
+    });
+  });
+}
+
+// ─── Host Search & Wave Typewriter Animation Controller ──────────────────────
+
+let searchAnimTimeout = null;
+let currentSearchIconIdx = 0;
+let lastPickedHostName = '';
+let isSearchAnimRunning = false;
+
+function onHostSearchInput(e) {
+  state.hostSearchQuery = e.target.value;
+  const placeholder = document.getElementById('host-search-placeholder');
+
+  if (placeholder) {
+    if (state.hostSearchQuery) {
+      placeholder.classList.add('is-hidden');
+    } else if (document.activeElement !== e.target) {
+      placeholder.classList.remove('is-hidden');
+    }
+  }
+
+  updateHostListFilteredView();
+}
+
+function onHostSearchFocus() {
+  const placeholder = document.getElementById('host-search-placeholder');
+  if (placeholder) {
+    placeholder.classList.add('is-hidden');
+  }
+}
+
+function onHostSearchBlur() {
+  const placeholder = document.getElementById('host-search-placeholder');
+  if (placeholder && !state.hostSearchQuery) {
+    placeholder.classList.remove('is-hidden');
+  }
+}
+
+function clearHostSearch() {
+  state.hostSearchQuery = '';
+  const input = document.getElementById('host-search-input');
+  if (input) {
+    input.value = '';
+    input.focus();
+  }
+  const placeholder = document.getElementById('host-search-placeholder');
+  if (placeholder) {
+    placeholder.classList.remove('is-hidden');
+  }
+  updateHostListFilteredView();
+}
+
+function updateHostListFilteredView() {
+  const query = (state.hostSearchQuery || '').trim().toLowerCase();
+  const hostSearchWrapper = document.querySelector('.host-search-wrapper');
+  if (!hostSearchWrapper) return;
+
+  const container = document.getElementById('host-search-container');
+  let clearBtn = container ? container.querySelector('.host-search-clear-btn') : null;
+
+  if (state.hostSearchQuery) {
+    if (!clearBtn && container) {
+      clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'host-search-clear-btn';
+      clearBtn.title = 'Limpar busca';
+      clearBtn.onclick = clearHostSearch;
+      clearBtn.innerHTML = icon('x', 14);
+      container.appendChild(clearBtn);
+    }
+  } else if (clearBtn) {
+    clearBtn.remove();
+  }
+
+  const filteredHosts = query
+    ? state.hosts.filter(h =>
+      (h.name && h.name.toLowerCase().includes(query)) ||
+      (h.address && h.address.toLowerCase().includes(query))
+    )
+    : state.hosts;
+
+  let metaEl = hostSearchWrapper.querySelector('.host-search-meta');
+  if (query) {
+    const metaHtml = `
+      <span class="host-search-count">${filteredHosts.length} de ${state.hosts.length} ${state.hosts.length === 1 ? 'host' : 'hosts'}</span>
+      <button type="button" class="host-search-clear-link" onclick="clearHostSearch()">Limpar filtro</button>
+    `;
+    if (!metaEl) {
+      metaEl = document.createElement('div');
+      metaEl.className = 'host-search-meta';
+      metaEl.innerHTML = metaHtml;
+      hostSearchWrapper.appendChild(metaEl);
+    } else {
+      metaEl.innerHTML = metaHtml;
+    }
+  } else if (metaEl) {
+    metaEl.remove();
+  }
+
+  const containerParent = hostSearchWrapper.parentNode;
+  if (!containerParent) return;
+
+  let hostListEl = document.getElementById('host-list');
+  const existingEmpty = containerParent.querySelector('.empty-state');
+
+  if (filteredHosts.length === 0 && state.hosts.length > 0) {
+    if (hostListEl) hostListEl.remove();
+    const emptyContent = `
+      ${icon('search', 44)}
+      <div class="empty-state-title">Nenhum host encontrado</div>
+      <div class="empty-state-text">Nenhum servidor corresponde à busca "<strong>${escHtml(state.hostSearchQuery)}</strong>".</div>
+      <button type="button" class="btn btn--secondary mt-4" onclick="clearHostSearch()">
+        ${icon('undo', 16)} Limpar Busca
+      </button>
+    `;
+    if (!existingEmpty) {
+      const emptyDiv = document.createElement('div');
+      emptyDiv.className = 'empty-state animate-fade-in';
+      emptyDiv.innerHTML = emptyContent;
+      containerParent.appendChild(emptyDiv);
+    } else {
+      existingEmpty.innerHTML = emptyContent;
+    }
+  } else {
+    if (existingEmpty) existingEmpty.remove();
+    const cardsHtml = filteredHosts.map(h => hostCard(h, state.hosts.indexOf(h), !!query)).join('');
+    if (hostListEl) {
+      hostListEl.innerHTML = cardsHtml;
+    } else {
+      const listDiv = document.createElement('div');
+      listDiv.className = 'host-list';
+      listDiv.id = 'host-list';
+      listDiv.innerHTML = cardsHtml;
+      containerParent.appendChild(listDiv);
+    }
+    if (!query) {
+      initHostDragAndDrop();
+    }
+  }
+}
+
+function cycleSearchIcon() {
+  const box = document.getElementById('host-search-icon-box');
+  if (!box) return;
+  const icons = box.querySelectorAll('.host-search-icon');
+  if (icons.length === 0) return;
+
+  icons.forEach(el => el.classList.remove('active'));
+  currentSearchIconIdx = (currentSearchIconIdx + 1) % icons.length;
+  icons[currentSearchIconIdx].classList.add('active');
+}
+
+function getNextSearchPlaceholderName() {
+  const availableNames = state.hosts
+    .map(h => (h.name || '').trim())
+    .filter(name => name.length > 0);
+
+  if (availableNames.length === 0) {
+    const defaults = ['Servidor Produção', 'Ubuntu VPS', 'Database Cluster', 'Gateway VPN', 'Kubernetes Node'];
+    const filtered = defaults.filter(n => n !== lastPickedHostName);
+    const pick = filtered[Math.floor(Math.random() * filtered.length)] || defaults[0];
+    lastPickedHostName = pick;
+    return pick;
+  }
+
+  if (availableNames.length === 1) {
+    lastPickedHostName = availableNames[0];
+    return availableNames[0];
+  }
+
+  const candidates = availableNames.filter(n => n !== lastPickedHostName);
+  const pool = candidates.length > 0 ? candidates : availableNames;
+  const chosen = pool[Math.floor(Math.random() * pool.length)];
+  lastPickedHostName = chosen;
+  return chosen;
+}
+
+function startHostSearchAnimation() {
+  stopHostSearchAnimation();
+
+  const waveTextEl = document.getElementById('host-search-wave-text');
+  if (!waveTextEl) return;
+
+  isSearchAnimRunning = true;
+  runTypewriterLoop();
+}
+
+function stopHostSearchAnimation() {
+  isSearchAnimRunning = false;
+  if (searchAnimTimeout) {
+    clearTimeout(searchAnimTimeout);
+    searchAnimTimeout = null;
+  }
+}
+
+function runTypewriterLoop() {
+  if (!isSearchAnimRunning) return;
+
+  const waveTextEl = document.getElementById('host-search-wave-text');
+  if (!waveTextEl) {
+    stopHostSearchAnimation();
+    return;
+  }
+
+  const targetName = getNextSearchPlaceholderName();
+  let charIdx = 0;
+
+  function typeNextChar() {
+    if (!isSearchAnimRunning) return;
+    const currentEl = document.getElementById('host-search-wave-text');
+    if (!currentEl) { stopHostSearchAnimation(); return; }
+
+    if (charIdx < targetName.length) {
+      const char = targetName[charIdx];
+      const span = document.createElement('span');
+      span.className = 'wave-char';
+      span.style.setProperty('--char-idx', String(charIdx));
+      span.textContent = char === ' ' ? '\u00A0' : char;
+      currentEl.appendChild(span);
+      charIdx++;
+
+      const speed = 70 + Math.floor(Math.random() * 45);
+      searchAnimTimeout = setTimeout(typeNextChar, speed);
+    } else {
+      searchAnimTimeout = setTimeout(startDeleting, 2200);
+    }
+  }
+
+  function startDeleting() {
+    if (!isSearchAnimRunning) return;
+    deleteNextChar();
+  }
+
+  function deleteNextChar() {
+    if (!isSearchAnimRunning) return;
+    const currentEl = document.getElementById('host-search-wave-text');
+    if (!currentEl) { stopHostSearchAnimation(); return; }
+
+    if (currentEl.lastChild) {
+      currentEl.removeChild(currentEl.lastChild);
+      searchAnimTimeout = setTimeout(deleteNextChar, 42);
+    } else {
+      cycleSearchIcon();
+      searchAnimTimeout = setTimeout(() => {
+        runTypewriterLoop();
+      }, 420);
+    }
+  }
+
+  typeNextChar();
 }
 
 //  Utility Functions 
@@ -1629,9 +2441,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Inicia conexão WebSocket em tempo real para live updates
   connectWebSocket();
 
-  // Close context menu on click outside
+  // Close context menu and host icon menu on click outside
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.context-menu')) closeContextMenu();
+    if (!e.target.closest('#host-icon-picker-container')) closeHostIconMenu();
   });
 
   // Close modal on backdrop click
@@ -1644,8 +2457,50 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Escape') {
       hideModal();
       closeContextMenu();
+      closeHostIconMenu();
     }
   });
+
+  // Bloqueio do menu de contexto padrão do navegador (exceto nos itens que possuem menu de contexto próprio)
+  document.addEventListener('contextmenu', (e) => {
+    if (!e.target.closest('#context-menu') && !e.target.closest('.host-card') && !e.target.closest('.host-item') && !e.target.closest('.bridge-item')) {
+      e.preventDefault();
+    }
+  });
+
+  // Bloqueio de teclas de sistema de navegador (F12, F7, atalhos de DevTools, reload, etc.)
+  window.addEventListener('keydown', (e) => {
+    // F12: DevTools
+    if (e.key === 'F12' || e.keyCode === 123) {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+    // F7: Caret browsing / acessibilidade de navegação
+    if (e.key === 'F7' || e.keyCode === 118) {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+    // F5 / Ctrl+R: Recarregar
+    if (e.key === 'F5' || (e.ctrlKey && (e.key === 'r' || e.key === 'R'))) {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+    // Ctrl+Shift+I / J / C: Atalhos de DevTools
+    if (e.ctrlKey && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+    // Ctrl+U / Ctrl+S / Ctrl+P: Exibir código-fonte, Salvar, Imprimir
+    if (e.ctrlKey && ['u', 'U', 's', 'S', 'p', 'P'].includes(e.key)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+  }, true);
 
   // Developer link
   document.getElementById('dev-link').addEventListener('click', () => {
@@ -1659,5 +2514,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Solicita dados iniciais ao backend (uma única vez cada)
   IPC.requestConfig();
   IPC.requestClientConfig();
+
 });
 

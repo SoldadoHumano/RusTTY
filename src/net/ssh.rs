@@ -9,12 +9,11 @@
 
 use super::{NetworkCommand, NetworkEvent};
 use russh::client::{Config, Handler, Session};
-use russh::{ChannelId, ChannelMsg, Preferred, kex, cipher, mac};
+use russh::{ChannelId, ChannelMsg, Preferred, kex};
 use russh_keys::key::KeyPair;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use async_trait::async_trait;
-use zeroize::Zeroize;
 
 // ─── Algoritmos Legacy ──────────────────────────────────────────────────────
 
@@ -207,7 +206,7 @@ pub async fn start_ssh_session(
             return;
         }
 
-        let mut channel = match bridge_session.channel_open_direct_tcpip(host.clone(), port as u32, "localhost", 0).await {
+        let channel = match bridge_session.channel_open_direct_tcpip(host.clone(), port as u32, "localhost", 0).await {
             Ok(c) => c,
             Err(e) => {
                 crate::debug_log!("ERROR", "Ponte falhou ao rotear para {}: {}", addr, e);

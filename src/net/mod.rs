@@ -11,7 +11,7 @@ pub mod icmp;
 // Re-exporta o tipo de autenticação SSH
 pub use ssh::SshAuth;
 
-/// Eventos enviados DA thread de rede PARA a interface gráfica (Iced).
+/// Eventos enviados DA thread de rede PARA a interface gráfica (RusTTY Terminal / UI).
 ///
 /// Invariante: todos os `String` são mensagens legíveis para exibir na UI.
 #[derive(Debug, Clone)]
@@ -26,7 +26,7 @@ pub enum NetworkEvent {
     Error(String),
 }
 
-/// Comandos enviados DA interface (Iced) PARA a thread de rede.
+/// Comandos enviados DA interface (RusTTY Terminal / UI) PARA a thread de rede.
 #[derive(Debug, Clone)]
 pub enum NetworkCommand {
     /// Inicia uma nova conexão SSH.

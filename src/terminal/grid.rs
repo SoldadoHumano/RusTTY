@@ -274,21 +274,29 @@ impl TerminalGrid {
 
     fn clear_to_end_of_line(&mut self) {
         let (r, c) = (self.cursor_row, self.cursor_col);
-        for col in c..self.cols {
-            self.cells[r][col] = Cell::default();
+        let max_c = self.cells[r].len().max(self.cols);
+        for col in c..max_c {
+            if col < self.cells[r].len() {
+                self.cells[r][col] = Cell::default();
+            }
         }
     }
 
     fn clear_to_start_of_line(&mut self) {
         let (r, c) = (self.cursor_row, self.cursor_col.min(self.cols - 1));
         for col in 0..=c {
-            self.cells[r][col] = Cell::default();
+            if col < self.cells[r].len() {
+                self.cells[r][col] = Cell::default();
+            }
         }
     }
 
     fn clear_line(&mut self, row: usize) {
-        for col in 0..self.cols {
-            self.cells[row][col] = Cell::default();
+        let max_c = self.cells[row].len().max(self.cols);
+        for col in 0..max_c {
+            if col < self.cells[row].len() {
+                self.cells[row][col] = Cell::default();
+            }
         }
     }
 
@@ -355,39 +363,75 @@ impl TerminalGrid {
     pub fn resize(&mut self, rows: usize, cols: usize) {
         crate::debug_log!("DEBUG", "TerminalGrid::resize: {}x{} -> {}x{} (scrollback: {} linhas)", self.cols, self.rows, cols, rows, self.scrollback.len());
         for row in &mut self.cells {
-            row.resize(cols, Cell::default());
+            if row.len() < cols {
+                row.resize(cols, Cell::default());
+            }
         }
         for row in &mut self.alt_cells {
-            row.resize(cols, Cell::default());
+            if row.len() < cols {
+                row.resize(cols, Cell::default());
+            }
         }
         for row in &mut self.scrollback {
-            row.resize(cols, Cell::default());
+            if row.len() < cols {
+                row.resize(cols, Cell::default());
+            }
         }
 
         if !self.is_alt_screen {
             if rows < self.rows {
-                let delta = self.rows - rows;
-                for _ in 0..delta {
-                    if !self.cells.is_empty() {
-                        let row = self.cells.remove(0);
-                        if self.max_scrollback > 0 {
-                            self.scrollback.push(row);
+                let last_content_row = self.cells
+                    .iter()
+                    .rposition(|row| !row.iter().all(|c| c.is_default_empty()));
+                let active_bottom = match last_content_row {
+                    Some(r) => r.max(self.cursor_row),
+                    None => self.cursor_row,
+                };
+
+                let needed_rows = active_bottom + 1;
+                if needed_rows > rows {
+                    let overflow = needed_rows - rows;
+                    for _ in 0..overflow {
+                        if !self.cells.is_empty() {
+                            let row = self.cells.remove(0);
+                            if !row.iter().all(|c| c.is_default_empty()) && self.max_scrollback > 0 {
+                                self.scrollback.push(row);
+                            }
                         }
                     }
+                    self.cursor_row = self.cursor_row.saturating_sub(overflow);
                 }
-                self.cursor_row = self.cursor_row.saturating_sub(delta);
-            } else if rows > self.rows {
-                let delta = rows - self.rows;
-                let mut pulled = 0;
-                while pulled < delta && !self.scrollback.is_empty() {
-                    let row = self.scrollback.pop().unwrap();
-                    self.cells.insert(0, row);
-                    pulled += 1;
-                }
+
+                self.cells.truncate(rows);
                 while self.cells.len() < rows {
                     self.cells.push(vec![Cell::default(); cols]);
                 }
-                self.cursor_row = (self.cursor_row + pulled).min(rows.saturating_sub(1));
+            } else if rows > self.rows {
+                let delta = rows - self.rows;
+
+                let last_content_row = self.cells
+                    .iter()
+                    .rposition(|row| !row.iter().all(|c| c.is_default_empty()));
+                let active_bottom = match last_content_row {
+                    Some(r) => r.max(self.cursor_row),
+                    None => self.cursor_row,
+                };
+
+                let is_screen_filled = active_bottom >= self.rows.saturating_sub(1);
+
+                let mut pulled = 0;
+                if is_screen_filled {
+                    while pulled < delta && !self.scrollback.is_empty() {
+                        let row = self.scrollback.pop().unwrap();
+                        self.cells.insert(0, row);
+                        pulled += 1;
+                    }
+                    self.cursor_row = (self.cursor_row + pulled).min(rows.saturating_sub(1));
+                }
+
+                while self.cells.len() < rows {
+                    self.cells.push(vec![Cell::default(); cols]);
+                }
             }
         } else {
             self.cells.resize(rows, vec![Cell::default(); cols]);
@@ -434,7 +478,9 @@ impl TerminalGrid {
                 }
             };
 
-            let line: String = row_slice[from..to]
+            let actual_to = to.min(row_slice.len());
+            let actual_from = from.min(actual_to);
+            let line: String = row_slice[actual_from..actual_to]
                 .iter()
                 .map(|c| c.ch)
                 .collect::<String>()
@@ -830,6 +876,7 @@ impl TerminalState {
         self.grid.resize(rows, cols);
     }
 
+    #[allow(dead_code)]
     pub fn clear_all(&mut self) {
         self.grid.clear_all();
     }
@@ -878,6 +925,71 @@ mod tests {
         assert_eq!(get_line_text(&state.grid, 1), "line 2");
         assert_eq!(get_line_text(&state.grid, 2), "line 3");
         assert_eq!(get_line_text(&state.grid, 3), "line 4");
+    }
+
+    #[test]
+    fn test_resize_prompt_not_pushed_down_by_empty_rows() {
+        let mut state = TerminalState::new(25, 80, 100);
+        // Simula banner de login SSH e prompt do shell nas linhas 0 e 1
+        state.process_bytes(b"Last login: Sat Sep 19 11:53:08 2026 from 192.168.18.2\r\nroot@srv01:~# ");
+
+        assert_eq!(get_line_text(&state.grid, 0), "Last login: Sat Sep 19 11:53:08 2026 from 192.168.18.2");
+        assert_eq!(get_line_text(&state.grid, 1), "root@srv01:~#");
+        assert_eq!(state.grid.cursor_row, 1);
+        assert_eq!(state.grid.scrollback.len(), 0);
+
+        // Encolhe horizontalmente e verticalmente (ex: de 25x80 para 10x60)
+        state.resize(10, 60);
+        assert_eq!(state.grid.scrollback.len(), 0, "Linhas ativas cabem na nova altura: scrollback deve permanecer vazio");
+        assert_eq!(get_line_text(&state.grid, 0), "Last login: Sat Sep 19 11:53:08 2026 from 192.168.18.2");
+        assert_eq!(get_line_text(&state.grid, 1), "root@srv01:~#");
+        assert_eq!(state.grid.cursor_row, 1);
+
+        // Expande para 30x100 (maior que o inicial)
+        state.resize(30, 100);
+        assert_eq!(state.grid.scrollback.len(), 0, "Scrollback deve continuar vazio");
+        assert_eq!(get_line_text(&state.grid, 0), "Last login: Sat Sep 19 11:53:08 2026 from 192.168.18.2");
+        assert_eq!(get_line_text(&state.grid, 1), "root@srv01:~#");
+        assert_eq!(state.grid.cursor_row, 1, "Cursor e prompt NÃO podem ser deslocados para baixo!");
+
+        // Linhas subsequentes (2..30) devem ser limpas, sem duplicação de prompts
+        for r in 2..30 {
+            assert_eq!(get_line_text(&state.grid, r), "", "Linha {} deve estar em branco", r);
+        }
+
+        // Múltiplos redimensionamentos rápidos para frente e para trás
+        for _ in 0..10 {
+            state.resize(8, 50);
+            state.resize(25, 80);
+        }
+        assert_eq!(state.grid.scrollback.len(), 0);
+        assert_eq!(get_line_text(&state.grid, 0), "Last login: Sat Sep 19 11:53:08 2026 from 192.168.18.2");
+        assert_eq!(get_line_text(&state.grid, 1), "root@srv01:~#");
+        assert_eq!(state.grid.cursor_row, 1);
+    }
+
+    #[test]
+    fn test_resize_extreme_shrink_and_restore() {
+        let mut state = TerminalState::new(25, 80, 100);
+        state.process_bytes(b"Last login: Sat Sep 19 11:53:08 2026 from 192.168.18.2\r\nroot@srv01:~# ");
+
+        // Encolhe até 1 única linha (situação extrema de esmagamento de janela)
+        state.resize(1, 80);
+        assert_eq!(state.grid.rows, 1);
+        assert_eq!(state.grid.scrollback.len(), 1, "Apenas a linha 0 excedente deve ir pro scrollback");
+        assert_eq!(get_line_text(&state.grid, 0), "root@srv01:~#");
+        assert_eq!(state.grid.cursor_row, 0);
+
+        // Expande de volta para 25 linhas
+        state.resize(25, 80);
+        assert_eq!(state.grid.rows, 25);
+        assert_eq!(state.grid.scrollback.len(), 0, "Linha do scrollback deve retornar para linha 0");
+        assert_eq!(get_line_text(&state.grid, 0), "Last login: Sat Sep 19 11:53:08 2026 from 192.168.18.2");
+        assert_eq!(get_line_text(&state.grid, 1), "root@srv01:~#");
+        assert_eq!(state.grid.cursor_row, 1);
+        for r in 2..25 {
+            assert_eq!(get_line_text(&state.grid, r), "", "Linha {} deve ser vazia", r);
+        }
     }
 
     #[test]
@@ -944,13 +1056,6 @@ mod tests {
         let raw_unix_paste = "comando 1\ncomando 2\ncomando 3";
         let normalized_unix = raw_unix_paste.replace("\r\n", "\r").replace('\n', "\r");
         assert_eq!(normalized_unix, "comando 1\rcomando 2\rcomando 3");
-    }
-
-    #[test]
-    fn test_font_measurement() {
-        let (cw, ch) = crate::terminal_app::measure_cell_metrics(14.0);
-        assert!(cw > 5.0 && cw < 15.0);
-        assert!(ch > 10.0 && ch < 30.0);
     }
 }
 
