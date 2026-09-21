@@ -64,6 +64,9 @@ pub struct ClientConfig {
     /// Modo debug: abre terminal de logging com informações detalhadas de conexão.
     #[serde(default)]
     pub debug_mode: bool,
+    /// Ignora confirmações e avisos de segurança para ações de risco (ex: ativação de SSH Legacy).
+    #[serde(default)]
+    pub ignore_security_warnings: bool,
 }
 
 fn default_scroll_lines() -> usize { 1 }
@@ -82,6 +85,7 @@ impl Default for ClientConfig {
             enable_auto_update: true,
             terminal_font_size: 14,
             debug_mode: false,
+            ignore_security_warnings: false,
         }
     }
 }
@@ -157,6 +161,7 @@ pub fn get_settings_schema() -> Vec<SettingDefinition> {
         SettingDefinition::new("performance_mode", "Modo Performance", "Reduz as atualizações da UI para maximizar a fluidez.", "boolean", "Terminal"),
         
         SettingDefinition::new("enable_customization", "Personalização (Highlighter)", "Habilitar destaque inteligente de IPs e palavras customizadas.", "boolean", "Personalização"),
+        SettingDefinition::new("ignore_security_warnings", "Ignorar Avisos de Segurança", "Desativa confirmações e alertas de risco ao habilitar protocolos obsoletos.", "boolean", "Segurança"),
         SettingDefinition::new("debug_mode", "Modo Debug", "Habilitar modo de diagnóstico extra (Requer reinício).", "boolean", "Avançado"),
     ]
 }

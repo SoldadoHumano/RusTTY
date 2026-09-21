@@ -1,4 +1,4 @@
-//! Ponto de entrada do RusTTY v2.0.0.
+//! Ponto de entrada do RusTTY v2.1.0.
 //!
 //! # Modos de Operação
 //!
@@ -12,6 +12,7 @@
 mod config;
 mod debug;
 mod net;
+mod security;
 mod terminal;
 mod update;
 mod webview_app;
@@ -19,6 +20,9 @@ mod webview_app;
 use terminal::TerminalInit;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Aplica proteções nativas de processo do Windows (DACL restritiva, mitigações, anti-debug)
+    security::apply_process_security();
+
     // Carrega configurações do cliente para verificar debug_mode antes de qualquer operação
     let _client_cfg = config::client::load_client_config();
 
@@ -33,7 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     debug::init_debug_logger(is_child);
     debug_log!(
         "INFO",
-        "Processo RusTTY v2.0.0 iniciado (PID: {}, role: {}, args: {:?})",
+        "Processo RusTTY v2.1.0 iniciado (PID: {}, role: {}, args: {:?})",
         std::process::id(),
         if is_child { "Terminal/SSH Child" } else { "Manager" },
         args
@@ -58,8 +62,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let address = args.get(pos + 1).cloned().unwrap_or_default();
         let port = args.get(pos + 2).and_then(|p| p.parse().ok()).unwrap_or(22);
         let user = args.get(pos + 3).cloned().unwrap_or_default();
-        let pass = args.get(pos + 4).cloned().unwrap_or_else(|| "none".to_string());
+        let raw_pass = args.get(pos + 4).cloned().unwrap_or_else(|| "-".to_string());
         
+        let pass = if raw_pass == "-" {
+            // Lê a senha de forma segura via stdin (evitando exposição no PEB/linha de comando)
+            use std::io::Read;
+            use zeroize::Zeroize;
+            let mut stdin_buf = String::new();
+            let _ = std::io::stdin().read_to_string(&mut stdin_buf);
+            let final_pass = stdin_buf.trim_end_matches(&['\r', '\n'][..]).to_string();
+            stdin_buf.zeroize();
+            final_pass
+        } else {
+            raw_pass
+        };
+
         debug_log!("INFO", "Roteando para Quick SSH Win32: {}@{}:{}", user, address, port);
         let init = TerminalInit::QuickSsh {
             address,
@@ -83,6 +100,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Modo padrão: Gerenciador de conexões via Webview UI
-    debug_log!("INFO", "Iniciando Gerenciador RusTTY v2.0.0 com interface Webview UI");
+    debug_log!("INFO", "Iniciando Gerenciador RusTTY v2.1.0 com interface Webview UI");
     webview_app::run()
 }

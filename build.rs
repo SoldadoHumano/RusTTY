@@ -24,8 +24,9 @@ fn main() {
             res.set("ProductName", "RusTTY");
             res.set("FileDescription", "RusTTY SSH Client & Terminal");
             res.set("LegalCopyright", "Copyright (c) 2026 Vitor");
-            res.set("FileVersion", "2.0.0.0");
-            res.set("ProductVersion", "2.0.0.0");
+            res.set("WebSite", "byvitor.com.br/rustty");
+            res.set("FileVersion", "2.1.0.0");
+            res.set("ProductVersion", "2.1.0.0");
             if let Err(e) = res.compile() {
                 eprintln!("Aviso: Falha ao embutir o ícone no .exe (winres): {}", e);
             }

@@ -23,6 +23,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_APP, WM_CHAR, WM_CLOSE, WM_DESTROY, WM_ENTERSIZEMOVE, WM_ERASEBKGND, WM_EXITSIZEMOVE,
     WM_KEYDOWN, WM_KILLFOCUS, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE,
     WM_MOUSEWHEEL, WM_PAINT, WM_RBUTTONDOWN, WM_SETFOCUS, WM_SIZE, WM_TIMER,
+    LoadIconW, SendMessageW, WM_SETICON, ICON_BIG, ICON_SMALL, HICON,
+    LoadImageW, IMAGE_ICON, LR_DEFAULTSIZE, LR_SHARED, LR_LOADFROMFILE,
+    GetSystemMetrics, SM_CXSMICON, SM_CYSMICON,
 };
 
 const VK_C: VIRTUAL_KEY = VIRTUAL_KEY(0x43);
@@ -120,6 +123,78 @@ pub fn create_terminal_window(
         let instance = GetModuleHandleW(None)?;
         let class_name = w!("RusTTY_Win32_Terminal");
 
+        let sm_cx = GetSystemMetrics(SM_CXSMICON);
+        let sm_cy = GetSystemMetrics(SM_CYSMICON);
+        let res_id = PCWSTR(1 as _);
+
+        let big_res = LoadImageW(
+            instance,
+            res_id,
+            IMAGE_ICON,
+            0,
+            0,
+            LR_DEFAULTSIZE | LR_SHARED,
+        ).ok().map(|h| HICON(h.0)).or_else(|| {
+            LoadIconW(instance, res_id).ok()
+        });
+
+        let sm_res = LoadImageW(
+            instance,
+            res_id,
+            IMAGE_ICON,
+            sm_cx,
+            sm_cy,
+            LR_SHARED,
+        ).ok().map(|h| HICON(h.0));
+
+        let (hicon_big, hicon_sm) = if big_res.is_none() || big_res.as_ref().map_or(true, |i| i.is_invalid()) {
+            let ico_path_buf = if std::path::Path::new("assets/images/iconv2.ico").exists() {
+                Some(std::path::PathBuf::from("assets/images/iconv2.ico"))
+            } else if let Ok(mut exe) = std::env::current_exe() {
+                exe.pop();
+                let candidate = exe.join("assets/images/iconv2.ico");
+                if candidate.exists() {
+                    Some(candidate)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            if let Some(path) = ico_path_buf {
+                let path_hstring = HSTRING::from(path.to_string_lossy().as_ref());
+                let ico_file = PCWSTR(path_hstring.as_ptr());
+                let f_big = LoadImageW(
+                    None,
+                    ico_file,
+                    IMAGE_ICON,
+                    0,
+                    0,
+                    LR_LOADFROMFILE | LR_DEFAULTSIZE,
+                ).ok().map(|h| HICON(h.0));
+
+                let f_sm = LoadImageW(
+                    None,
+                    ico_file,
+                    IMAGE_ICON,
+                    sm_cx,
+                    sm_cy,
+                    LR_LOADFROMFILE,
+                ).ok().map(|h| HICON(h.0));
+
+                let big = f_big.unwrap_or_else(|| HICON(ptr::null_mut()));
+                let sm = f_sm.unwrap_or(big);
+                (big, sm)
+            } else {
+                (HICON(ptr::null_mut()), HICON(ptr::null_mut()))
+            }
+        } else {
+            let big = big_res.unwrap_or_else(|| HICON(ptr::null_mut()));
+            let sm = sm_res.unwrap_or(big);
+            (big, sm)
+        };
+
         let wc = WNDCLASSEXW {
             cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
             style: CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS,
@@ -127,12 +202,12 @@ pub fn create_terminal_window(
             cbClsExtra: 0,
             cbWndExtra: 0,
             hInstance: instance.into(),
-            hIcon: windows::Win32::UI::WindowsAndMessaging::HICON(ptr::null_mut()),
+            hIcon: hicon_big,
             hCursor: LoadCursorW(None, IDC_IBEAM)?,
             hbrBackground: HBRUSH(ptr::null_mut()), // NULL brush para evitar flicker
             lpszMenuName: PCWSTR::null(),
             lpszClassName: class_name,
-            hIconSm: windows::Win32::UI::WindowsAndMessaging::HICON(ptr::null_mut()),
+            hIconSm: hicon_sm,
         };
 
         let _ = RegisterClassExW(&wc);
@@ -154,6 +229,24 @@ pub fn create_terminal_window(
             instance,
             None,
         )?;
+
+        // Aplica os ícones explicitamente à janela (barra de título e barra de tarefas / Alt+Tab)
+        if !hicon_big.is_invalid() {
+            let _ = SendMessageW(
+                hwnd,
+                WM_SETICON,
+                WPARAM(ICON_BIG as _),
+                LPARAM(hicon_big.0 as _),
+            );
+        }
+        if !hicon_sm.is_invalid() {
+            let _ = SendMessageW(
+                hwnd,
+                WM_SETICON,
+                WPARAM(ICON_SMALL as _),
+                LPARAM(hicon_sm.0 as _),
+            );
+        }
 
         // Ativa modo escuro nativo do Windows na barra de título
         let dark_mode: BOOL = true.into();

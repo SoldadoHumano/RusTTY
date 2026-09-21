@@ -81,25 +81,62 @@ impl WebviewState {
 
 // ─── Serialização segura de config para o frontend ──────────────────────────
 
-fn serialize_hosts(config: &AppConfig) -> Vec<Value> {
-    config.root_nodes.iter().filter_map(|node| {
-        if let ConfigNode::Host(h) = node {
-            Some(json!({
-                "name": h.name,
-                "address": h.address,
-                "port": h.port,
-                "username": h.username,
-                "has_password": !matches!(h.auth, AuthType::None),
-                "enable_icmp": h.enable_icmp,
-                "bridge_id": h.bridge_id.map(|id| id.to_string()),
-                "legacy_ssh": h.legacy_ssh,
-                "icon": h.icon.clone().unwrap_or_else(|| "terminal".to_string()),
-                "allow_domain": h.address.parse::<std::net::IpAddr>().is_err(),
-            }))
-        } else {
-            None
+fn serialize_host_profile(h: &HostProfile, folder_path: &[String]) -> Value {
+    json!({
+        "id": h.id,
+        "name": h.name,
+        "address": h.address,
+        "port": h.port,
+        "username": h.username,
+        "has_password": !matches!(h.auth, AuthType::None),
+        "enable_icmp": h.enable_icmp,
+        "bridge_id": h.bridge_id.map(|id| id.to_string()),
+        "legacy_ssh": h.legacy_ssh,
+        "icon": h.icon.clone().unwrap_or_else(|| "terminal".to_string()),
+        "allow_domain": h.address.parse::<std::net::IpAddr>().is_err(),
+        "folder_path": folder_path,
+    })
+}
+
+fn serialize_nodes(nodes: &[ConfigNode], current_path: &[String]) -> Vec<Value> {
+    nodes.iter().map(|node| {
+        match node {
+            ConfigNode::Host(h) => {
+                json!({
+                    "type": "host",
+                    "id": h.id,
+                    "data": serialize_host_profile(h, current_path),
+                })
+            }
+            ConfigNode::Folder { id, name, icon, color, children } => {
+                let mut next_path = current_path.to_vec();
+                next_path.push(name.clone());
+                json!({
+                    "type": "folder",
+                    "id": id,
+                    "name": name,
+                    "icon": icon.clone().unwrap_or_else(|| "folder".to_string()),
+                    "color": color,
+                    "children": serialize_nodes(children, &next_path),
+                })
+            }
         }
     }).collect()
+}
+
+fn serialize_hosts(config: &AppConfig) -> Vec<Value> {
+    config.get_all_hosts_with_path().into_iter().map(|(h, path)| {
+        serialize_host_profile(h, &path)
+    }).collect()
+}
+
+fn send_config_data(config: &AppConfig, webview: &WebView, ws_tx: &broadcast::Sender<String>) {
+    send_to_frontend(webview, ws_tx, &json!({
+        "type": "config_data",
+        "nodes": serialize_nodes(&config.root_nodes, &[]),
+        "hosts": serialize_hosts(config),
+        "bridges": serialize_bridges(config),
+    }));
 }
 
 fn serialize_bridges(config: &AppConfig) -> Vec<Value> {
@@ -134,6 +171,7 @@ fn serialize_client_config(cc: &ClientConfig) -> Value {
         "enable_auto_update": cc.enable_auto_update,
         "terminal_font_size": cc.terminal_font_size,
         "debug_mode": cc.debug_mode,
+        "ignore_security_warnings": cc.ignore_security_warnings,
         "customization_data": {
             "ipv4": ipv4,
             "ipv6": ipv6,
@@ -248,11 +286,7 @@ fn handle_ipc_message(
         "get_config" => {
             crate::debug_log!("DEBUG", "Webview IPC: get_config solicitado");
             let st = state.lock().unwrap();
-            send_to_frontend(webview, ws_tx, &json!({
-                "type": "config_data",
-                "hosts": serialize_hosts(&st.config),
-                "bridges": serialize_bridges(&st.config),
-            }));
+            send_config_data(&st.config, webview, ws_tx);
         }
 
         "get_client_config" => {
@@ -298,12 +332,14 @@ fn handle_ipc_message(
             let icon = data.get("icon").and_then(|v| v.as_str()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
             let bridge_id_str = data.get("bridge_id").and_then(|v| v.as_str());
             let bridge_id = bridge_id_str.and_then(|s| uuid::Uuid::parse_str(s).ok());
+            let host_id = parsed.get("host_id").or_else(|| data.get("id")).and_then(|v| v.as_str()).map(|s| s.to_string());
+            let target_folder_id = parsed.get("target_folder_id").or_else(|| data.get("target_folder_id")).and_then(|v| v.as_str()).map(|s| s.to_string());
             let edit_index = parsed.get("edit_index").and_then(|v| v.as_u64()).map(|v| v as usize);
 
             crate::debug_log!(
                 "INFO",
-                "Webview IPC: Salvando host '{}' ({}:{}, usuário: '{}', allow_domain: {}, icmp: {}, legacy: {}, icon: {:?})",
-                name, address, port, username, allow_domain, enable_icmp, legacy_ssh, icon
+                "Webview IPC: Salvando host '{}' ({}:{}, usuário: '{}', allow_domain: {}, icmp: {}, legacy: {}, icon: {:?}, id: {:?})",
+                name, address, port, username, allow_domain, enable_icmp, legacy_ssh, icon, host_id
             );
 
             // Validação
@@ -323,50 +359,87 @@ fn handle_ipc_message(
                 send_error(webview, ws_tx, "Porta inválida (1–65535)."); return;
             }
 
-            let auth = if password.is_empty() {
-                AuthType::None
-            } else {
-                AuthType::Password(
-                    crate::config::ProtectedMemory::new(&password)
-                        .unwrap_or_else(|_| crate::config::ProtectedMemory::new("").unwrap())
-                )
-            };
-
-            let profile = HostProfile {
-                name, address, port, username, auth,
-                enable_icmp,
-                bridge_id,
-                legacy_ssh,
-                icon,
-            };
-
             let mut st = state.lock().unwrap();
-            if let Some(idx) = edit_index {
-                if idx < st.config.root_nodes.len() {
-                    // Ao editar, preserva a senha original se nenhuma nova foi fornecida
-                    if password.is_empty() {
-                        if let Some(ConfigNode::Host(existing)) = st.config.root_nodes.get(idx) {
-                            let mut profile = profile;
-                            profile.auth = existing.auth.clone();
-                            st.config.root_nodes[idx] = ConfigNode::Host(profile);
-                        } else {
-                            st.config.root_nodes[idx] = ConfigNode::Host(profile);
+            let mut edited = false;
+
+            // 1. Tenta editar por ID em qualquer nível da árvore
+            if let Some(ref hid) = host_id {
+                if let Some(existing) = st.config.find_host_mut(hid) {
+                    existing.name = name.clone();
+                    existing.address = address.clone();
+                    existing.port = port;
+                    existing.username = username.clone();
+                    existing.enable_icmp = enable_icmp;
+                    existing.bridge_id = bridge_id;
+                    existing.legacy_ssh = legacy_ssh;
+                    existing.icon = icon.clone();
+                    if !password.is_empty() {
+                        existing.auth = AuthType::Password(
+                            crate::config::ProtectedMemory::new(&password)
+                                .unwrap_or_else(|_| crate::config::ProtectedMemory::new("").unwrap())
+                        );
+                    }
+                    edited = true;
+                }
+            }
+
+            // 2. Tenta editar por índice legado se não encontrou por ID
+            if !edited {
+                if let Some(idx) = edit_index {
+                    if idx < st.config.root_nodes.len() {
+                        if let Some(ConfigNode::Host(existing)) = st.config.root_nodes.get_mut(idx) {
+                            existing.name = name.clone();
+                            existing.address = address.clone();
+                            existing.port = port;
+                            existing.username = username.clone();
+                            existing.enable_icmp = enable_icmp;
+                            existing.bridge_id = bridge_id;
+                            existing.legacy_ssh = legacy_ssh;
+                            existing.icon = icon.clone();
+                            if !password.is_empty() {
+                                existing.auth = AuthType::Password(
+                                    crate::config::ProtectedMemory::new(&password)
+                                        .unwrap_or_else(|_| crate::config::ProtectedMemory::new("").unwrap())
+                                );
+                            }
+                            edited = true;
                         }
-                    } else {
-                        st.config.root_nodes[idx] = ConfigNode::Host(profile);
                     }
                 }
-            } else {
-                st.config.root_nodes.push(ConfigNode::Host(profile));
+            }
+
+            // 3. Se não foi edição, cria novo host
+            if !edited {
+                let auth = if password.is_empty() {
+                    AuthType::None
+                } else {
+                    AuthType::Password(
+                        crate::config::ProtectedMemory::new(&password)
+                            .unwrap_or_else(|_| crate::config::ProtectedMemory::new("").unwrap())
+                    )
+                };
+
+                let new_id = host_id.unwrap_or_else(crate::config::generate_node_id);
+                let profile = HostProfile {
+                    id: new_id.clone(),
+                    name, address, port, username, auth,
+                    enable_icmp,
+                    bridge_id,
+                    legacy_ssh,
+                    icon,
+                };
+
+                if let Some(ref tfid) = target_folder_id {
+                    st.config.root_nodes.push(ConfigNode::Host(profile));
+                    let _ = st.config.move_host(&new_id, Some(tfid), None);
+                } else {
+                    st.config.root_nodes.push(ConfigNode::Host(profile));
+                }
             }
 
             match save_config(&st.config) {
                 Ok(()) => {
-                    send_to_frontend(webview, ws_tx, &json!({
-                        "type": "config_data",
-                        "hosts": serialize_hosts(&st.config),
-                        "bridges": serialize_bridges(&st.config),
-                    }));
+                    send_config_data(&st.config, webview, ws_tx);
                     send_success(webview, ws_tx, "Host salvo com sucesso.");
                 }
                 Err(e) => send_error(webview, ws_tx, &format!("Erro ao salvar: {}", e)),
@@ -374,25 +447,38 @@ fn handle_ipc_message(
         }
 
         "delete_host" => {
-            let index = match parsed.get("index").and_then(|v| v.as_u64()) {
-                Some(i) => i as usize,
-                None => { send_error(webview, ws_tx, "Índice inválido."); return; }
-            };
-            crate::debug_log!("INFO", "Webview IPC: Removendo host no índice {}", index);
+            let host_id = parsed.get("host_id").and_then(|v| v.as_str());
+            let index = parsed.get("index").and_then(|v| v.as_u64()).map(|v| v as usize);
+
+            crate::debug_log!("INFO", "Webview IPC: Removendo host (id: {:?}, index: {:?})", host_id, index);
             let mut st = state.lock().unwrap();
-            if index < st.config.root_nodes.len() {
-                st.config.root_nodes.remove(index);
+            let mut removed = false;
+
+            if let Some(hid) = host_id {
+                if st.config.delete_host_by_id(hid).is_ok() {
+                    removed = true;
+                }
+            }
+
+            if !removed {
+                if let Some(idx) = index {
+                    if idx < st.config.root_nodes.len() {
+                        st.config.root_nodes.remove(idx);
+                        removed = true;
+                    }
+                }
+            }
+
+            if removed {
                 match save_config(&st.config) {
                     Ok(()) => {
-                        send_to_frontend(webview, ws_tx, &json!({
-                            "type": "config_data",
-                            "hosts": serialize_hosts(&st.config),
-                            "bridges": serialize_bridges(&st.config),
-                        }));
+                        send_config_data(&st.config, webview, ws_tx);
                         send_success(webview, ws_tx, "Host removido.");
                     }
                     Err(e) => send_error(webview, ws_tx, &format!("Erro ao salvar: {}", e)),
                 }
+            } else {
+                send_error(webview, ws_tx, "Host não encontrado para remoção.");
             }
         }
 
@@ -410,25 +496,10 @@ fn handle_ipc_message(
                     changed = true;
                 }
             } else if let Some(order) = parsed.get("order").and_then(|v| v.as_array()) {
-                let indices: Vec<usize> = order.iter().filter_map(|v| v.as_u64().map(|i| i as usize)).collect();
-                if indices.len() == st.config.root_nodes.len() {
-                    let old_nodes = std::mem::take(&mut st.config.root_nodes);
-                    let mut new_nodes = Vec::with_capacity(indices.len());
-                    let mut valid = true;
-                    for &idx in &indices {
-                        if idx < old_nodes.len() {
-                            new_nodes.push(old_nodes[idx].clone());
-                        } else {
-                            valid = false;
-                            break;
-                        }
-                    }
-                    if valid && new_nodes.len() == old_nodes.len() {
-                        st.config.root_nodes = new_nodes;
-                        changed = true;
-                    } else {
-                        st.config.root_nodes = old_nodes;
-                    }
+                let ids: Vec<String> = order.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                if !ids.is_empty() {
+                    let _ = st.config.reorder_nodes(None, &ids);
+                    changed = true;
                 }
             }
 
@@ -436,14 +507,116 @@ fn handle_ipc_message(
                 match save_config(&st.config) {
                     Ok(()) => {
                         crate::debug_log!("INFO", "Webview IPC: Ordem dos hosts atualizada e persistida com sucesso");
-                        send_to_frontend(webview, ws_tx, &json!({
-                            "type": "config_data",
-                            "hosts": serialize_hosts(&st.config),
-                            "bridges": serialize_bridges(&st.config),
-                        }));
+                        send_config_data(&st.config, webview, ws_tx);
                     }
                     Err(e) => send_error(webview, ws_tx, &format!("Erro ao salvar nova ordem dos hosts: {}", e)),
                 }
+            }
+        }
+
+        // ── CRUD: Pastas (Folders) ───────────────────────────────────
+        "save_folder" => {
+            let folder_id = parsed.get("folder_id").and_then(|v| v.as_str());
+            let name = parsed.get("name").and_then(|v| v.as_str()).unwrap_or_default().trim().to_string();
+            let icon = parsed.get("icon").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let color = parsed.get("color").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let parent_id = parsed.get("parent_id").and_then(|v| v.as_str());
+
+            crate::debug_log!("INFO", "Webview IPC: Salvando pasta '{}' (id: {:?}, parent: {:?})", name, folder_id, parent_id);
+
+            if name.is_empty() {
+                send_error(webview, ws_tx, "O nome da pasta é obrigatório.");
+                return;
+            }
+
+            let mut st = state.lock().unwrap();
+            let result = if let Some(fid) = folder_id {
+                st.config.update_folder(fid, name, icon, color)
+            } else {
+                st.config.add_folder(parent_id, name, icon, color).map(|_| ())
+            };
+
+            match result {
+                Ok(()) => {
+                    match save_config(&st.config) {
+                        Ok(()) => {
+                            send_config_data(&st.config, webview, ws_tx);
+                            send_success(webview, ws_tx, "Pasta salva com sucesso.");
+                        }
+                        Err(e) => send_error(webview, ws_tx, &format!("Erro ao salvar: {}", e)),
+                    }
+                }
+                Err(e) => send_error(webview, ws_tx, &e),
+            }
+        }
+
+        "delete_folder" => {
+            let folder_id = match parsed.get("folder_id").and_then(|v| v.as_str()) {
+                Some(id) => id,
+                None => { send_error(webview, ws_tx, "ID da pasta não fornecido."); return; }
+            };
+            let keep_contents = parsed.get("keep_contents").and_then(|v| v.as_bool()).unwrap_or(true);
+
+            crate::debug_log!("INFO", "Webview IPC: Excluindo pasta '{}' (manter filhos: {})", folder_id, keep_contents);
+            let mut st = state.lock().unwrap();
+            match st.config.delete_folder(folder_id, keep_contents) {
+                Ok(()) => {
+                    match save_config(&st.config) {
+                        Ok(()) => {
+                            send_config_data(&st.config, webview, ws_tx);
+                            send_success(webview, ws_tx, "Pasta excluída com sucesso.");
+                        }
+                        Err(e) => send_error(webview, ws_tx, &format!("Erro ao salvar: {}", e)),
+                    }
+                }
+                Err(e) => send_error(webview, ws_tx, &e),
+            }
+        }
+
+        "move_host" => {
+            let host_id = match parsed.get("host_id").and_then(|v| v.as_str()) {
+                Some(id) => id,
+                None => { send_error(webview, ws_tx, "ID do host não fornecido."); return; }
+            };
+            let target_folder_id = parsed.get("target_folder_id").and_then(|v| v.as_str());
+            let target_index = parsed.get("target_index").and_then(|v| v.as_u64()).map(|v| v as usize);
+
+            crate::debug_log!("INFO", "Webview IPC: Movendo host '{}' para pasta {:?}", host_id, target_folder_id);
+            let mut st = state.lock().unwrap();
+            match st.config.move_host(host_id, target_folder_id, target_index) {
+                Ok(()) => {
+                    match save_config(&st.config) {
+                        Ok(()) => {
+                            send_config_data(&st.config, webview, ws_tx);
+                            send_success(webview, ws_tx, "Host movido com sucesso.");
+                        }
+                        Err(e) => send_error(webview, ws_tx, &format!("Erro ao salvar: {}", e)),
+                    }
+                }
+                Err(e) => send_error(webview, ws_tx, &e),
+            }
+        }
+
+        "reorder_nodes" => {
+            let parent_id = parsed.get("parent_id").and_then(|v| v.as_str());
+            let order_arr = match parsed.get("order").and_then(|v| v.as_array()) {
+                Some(arr) => arr,
+                None => { send_error(webview, ws_tx, "Lista de ordem inválida."); return; }
+            };
+            let order_ids: Vec<String> = order_arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+
+            crate::debug_log!("INFO", "Webview IPC: Reordenando nós (parent: {:?}, itens: {})", parent_id, order_ids.len());
+            let mut st = state.lock().unwrap();
+            match st.config.reorder_nodes(parent_id, &order_ids) {
+                Ok(()) => {
+                    match save_config(&st.config) {
+                        Ok(()) => {
+                            send_config_data(&st.config, webview, ws_tx);
+                        }
+                        Err(e) => send_error(webview, ws_tx, &format!("Erro ao salvar: {}", e)),
+                    }
+                }
+                Err(e) => send_error(webview, ws_tx, &e),
             }
         }
 
@@ -515,11 +688,7 @@ fn handle_ipc_message(
 
             match save_config(&st.config) {
                 Ok(()) => {
-                    send_to_frontend(webview, ws_tx, &json!({
-                        "type": "config_data",
-                        "hosts": serialize_hosts(&st.config),
-                        "bridges": serialize_bridges(&st.config),
-                    }));
+                    send_config_data(&st.config, webview, ws_tx);
                     send_success(webview, ws_tx, "Ponte salva com sucesso.");
                 }
                 Err(e) => send_error(webview, ws_tx, &format!("Erro ao salvar: {}", e)),
@@ -537,23 +706,27 @@ fn handle_ipc_message(
                 let deleted_id = st.config.bridges[index].id;
                 st.config.bridges.remove(index);
 
-                // Remove referências de hosts que usavam esta ponte
-                for node in &mut st.config.root_nodes {
-                    if let ConfigNode::Host(ref mut host) = node {
-                        if host.bridge_id == Some(deleted_id) {
-                            host.bridge_id = None;
-                            host.enable_icmp = true;
+                // Remove referências de hosts que usavam esta ponte recursivamente em qualquer pasta
+                fn clear_bridge_ref(nodes: &mut [ConfigNode], bridge_id: uuid::Uuid) {
+                    for node in nodes {
+                        match node {
+                            ConfigNode::Host(ref mut host) => {
+                                if host.bridge_id == Some(bridge_id) {
+                                    host.bridge_id = None;
+                                    host.enable_icmp = true;
+                                }
+                            }
+                            ConfigNode::Folder { children, .. } => {
+                                clear_bridge_ref(children, bridge_id);
+                            }
                         }
                     }
                 }
+                clear_bridge_ref(&mut st.config.root_nodes, deleted_id);
 
                 match save_config(&st.config) {
                     Ok(()) => {
-                        send_to_frontend(webview, ws_tx, &json!({
-                            "type": "config_data",
-                            "hosts": serialize_hosts(&st.config),
-                            "bridges": serialize_bridges(&st.config),
-                        }));
+                        send_config_data(&st.config, webview, ws_tx);
                         send_success(webview, ws_tx, "Ponte removida.");
                     }
                     Err(e) => send_error(webview, ws_tx, &format!("Erro ao salvar: {}", e)),
@@ -681,12 +854,17 @@ fn handle_ipc_message(
 
             match std::env::current_exe() {
                 Ok(exe_path) => {
-                    match std::process::Command::new(&exe_path)
-                        .args(["--quick-ssh", address, &port, username, password])
-                        .env("RUSTTY_CHILD", "1")
-                        .spawn()
-                    {
-                        Ok(child) => {
+                    let mut cmd = std::process::Command::new(&exe_path);
+                    cmd.args(["--quick-ssh", address, &port, username, "-"]);
+                    cmd.stdin(std::process::Stdio::piped());
+                    cmd.env("RUSTTY_CHILD", "1");
+
+                    match cmd.spawn() {
+                        Ok(mut child) => {
+                            if let Some(mut stdin) = child.stdin.take() {
+                                use std::io::Write;
+                                let _ = stdin.write_all(password.as_bytes());
+                            }
                             crate::debug_log!("INFO", "Webview IPC: Conexão rápida SSH iniciada com sucesso (PID: {})", child.id());
                         }
                         Err(e) => {
@@ -750,6 +928,9 @@ fn handle_ipc_message(
                 }
                 "enable_auto_update" => {
                     if let Some(v) = value.and_then(|v| v.as_bool()) { cc.enable_auto_update = v; }
+                }
+                "ignore_security_warnings" => {
+                    if let Some(v) = value.and_then(|v| v.as_bool()) { cc.ignore_security_warnings = v; }
                 }
                 "debug_mode" => {
                     if let Some(v) = value.and_then(|v| v.as_bool()) {
@@ -874,15 +1055,14 @@ fn handle_ipc_message(
             let st = state.lock().unwrap();
             if !st.client_config.global_icmp { return; }
 
-            let hosts_for_icmp: Vec<(usize, String, bool)> = st.config.root_nodes.iter()
+            let hosts_for_icmp: Vec<(usize, String, String)> = st.config.get_all_hosts_with_path().into_iter()
                 .enumerate()
-                .filter_map(|(idx, node)| {
-                    if let ConfigNode::Host(h) = node {
-                        if h.enable_icmp {
-                            return Some((idx, h.address.clone(), true));
-                        }
+                .filter_map(|(idx, (h, _))| {
+                    if h.enable_icmp {
+                        Some((idx, h.id.clone(), h.address.clone()))
+                    } else {
+                        None
                     }
-                    None
                 })
                 .collect();
             drop(st);
@@ -892,7 +1072,7 @@ fn handle_ipc_message(
             let proxy = proxy.clone();
             std::thread::spawn(move || {
                 let mut results: HashMap<String, bool> = HashMap::new();
-                for (idx, ip, _) in hosts_for_icmp {
+                for (idx, host_id, ip) in hosts_for_icmp {
                     let mut cmd = std::process::Command::new("ping");
                     
                     #[cfg(target_os = "windows")]
@@ -912,6 +1092,7 @@ fn handle_ipc_message(
                         .status()
                         .map(|s| s.success())
                         .unwrap_or(false);
+                    results.insert(host_id, result);
                     results.insert(idx.to_string(), result);
                 }
                 let _ = proxy.send_event(json!({

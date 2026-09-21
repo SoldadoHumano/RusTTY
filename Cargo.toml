@@ -1,6 +1,6 @@
 [package]
 name = "rustty"
-version = "2.0.0"
+version = "2.1.0"
 edition = "2021"
 
 [dependencies]
@@ -53,6 +53,8 @@ windows = { version = "0.58.0", features = [
     "Win32_System_Com",
     "Win32_System_Registry",
     "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_System_Threading",
 ] }
 
 

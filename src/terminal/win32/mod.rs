@@ -61,6 +61,7 @@ pub fn run_win32_terminal(init: TerminalInit) -> Result<(), Box<dyn std::error::
             if let Ok(id) = uuid::Uuid::parse_str(&id_str) {
                 let h = config.bridges.iter().find(|b| b.id == id).map(|b| {
                     crate::config::HostProfile {
+                        id: b.id.to_string(),
                         name: b.name.clone(),
                         address: b.address.clone(),
                         port: b.port,
@@ -87,6 +88,7 @@ pub fn run_win32_terminal(init: TerminalInit) -> Result<(), Box<dyn std::error::
             };
 
             let h = crate::config::HostProfile {
+                id: "quick-connect".to_string(),
                 name: "Conexão Rápida".to_string(),
                 address: address.clone(),
                 port,

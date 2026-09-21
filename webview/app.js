@@ -23,6 +23,7 @@ const ICON_PATHS = {
   eye: '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
   'eye-off': '<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/>',
   shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  'shield-alert': '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
   save: '<path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   undo: '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>',
@@ -32,11 +33,15 @@ const ICON_PATHS = {
   check: '<path d="M20 6 9 17l-5-5"/>',
   'globe-lock': '<path d="M15.686 15A14.5 14.5 0 0 1 12 22a14.5 14.5 0 0 1 0-20 10 10 0 1 0 9.542 13"/><path d="M2 12h8.5"/><path d="M20 6V4a2 2 0 1 0-4 0v2"/><rect width="8" height="5" x="14" y="6" rx="1"/>',
   folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  'folder-plus': '<path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  'folder-symlink': '<path d="m2 13 3-3 3 3"/><path d="M5 10v7a2 2 0 0 0 2 2h12"/><path d="M22 13V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
   'heart-plus': '<path d="M13.5 2.764a4.97 4.97 0 0 0-2.83 1.3l-.67.66-.67-.66a5 5 0 0 0-7.08 7.07L12 20.84l3.7-3.71"/><path d="M16 14v6"/><path d="M19 17h-6"/>',
   'at-sign': '<circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/>',
   globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
   'chevron-right': '<path d="m9 18 6-6-6-6"/>',
+  'chevron-down': '<path d="m6 9 6 6 6-6"/>',
+  move: '<polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.34-4.34"/>',
   'folder-search': '<path d="M10.7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v4.1"/><path d="m21 21-1.9-1.9"/><circle cx="17" cy="17" r="3"/>',
   'book-search': '<path d="M11 22H5.5a1 1 0 0 1 0-5h4.501"/><path d="m21 22-1.879-1.878"/><path d="M3 19.5v-15A2.5 2.5 0 0 1 5.5 2H18a1 1 0 0 1 1 1v8"/><circle cx="17" cy="18" r="3"/>',
@@ -71,6 +76,22 @@ const HOST_AVAILABLE_ICONS = [
   { id: 'rocket', label: 'Produção' },
   { id: 'save', label: 'Backup' },
   { id: 'user', label: 'Usuário' },
+];
+
+const FOLDER_COLORS = [
+  { name: 'Laranja RusTTY', value: '#FF7300' },
+  { name: 'Azul Elétrico', value: '#3B82F6' },
+  { name: 'Verde Esmeralda', value: '#10B981' },
+  { name: 'Roxo Neon', value: '#8B5CF6' },
+  { name: 'Vermelho Coral', value: '#EF4444' },
+  { name: 'Âmbar Dourado', value: '#F59E0B' },
+  { name: 'Ciano Vibrante', value: '#06B6D4' },
+  { name: 'Rosa Magenta', value: '#EC4899' },
+];
+
+const FOLDER_AVAILABLE_ICONS = [
+  'folder', 'folder-search', 'book-search', 'server', 'server-plus', 'network',
+  'globe', 'globe-lock', 'shield', 'lock', 'cpu', 'gpu', 'hard-drive', 'save', 'rocket'
 ];
 
 function getHostIconLabel(id) {
@@ -156,9 +177,17 @@ const IPC = {
   openBridgeTerminal(index) { this.send({ type: 'connect_bridge', index }); },
   quickConnect(data) { this.send({ type: 'quick_connect', data }); },
 
-  saveHost(data, editIndex) { this.send({ type: 'save_host', data, edit_index: editIndex ?? null }); },
-  deleteHost(index) { this.send({ type: 'delete_host', index }); },
+  saveHost(data, editIndex, hostId, targetFolderId) {
+    this.send({ type: 'save_host', data, edit_index: editIndex ?? null, host_id: hostId ?? null, target_folder_id: targetFolderId ?? null });
+  },
+  deleteHost(index, hostId) {
+    this.send({ type: 'delete_host', index: index ?? null, host_id: hostId ?? null });
+  },
   reorderHosts(fromIndex, toIndex) { this.send({ type: 'reorder_hosts', from_index: fromIndex, to_index: toIndex }); },
+  saveFolder(data) { this.send({ type: 'save_folder', ...data }); },
+  deleteFolder(folderId, keepContents) { this.send({ type: 'delete_folder', folder_id: folderId, keep_contents: keepContents }); },
+  moveHost(hostId, targetFolderId, targetIndex) { this.send({ type: 'move_host', host_id: hostId, target_folder_id: targetFolderId, target_index: targetIndex }); },
+  reorderNodes(parentId, order) { this.send({ type: 'reorder_nodes', parent_id: parentId, order }); },
   saveBridge(data, editIndex) { this.send({ type: 'save_bridge', data, edit_index: editIndex ?? null }); },
   deleteBridge(index) { this.send({ type: 'delete_bridge', index }); },
 
@@ -191,8 +220,10 @@ const state = {
   hostSearchQuery: '',
 
   // Data from Rust
+  nodes: [],
   hosts: [],
   bridges: [],
+  collapsedFolders: {},
   clientConfig: {},
   settingsSchema: [],
   icmpStatus: {},
@@ -210,6 +241,7 @@ const state = {
 
   // Edit mode
   editingHostIndex: null,
+  editingHostId: null,
   editingBridgeIndex: null,
 
   // Customization
@@ -224,7 +256,8 @@ function createHostForm() {
   return {
     name: '', address: '', port: '22', username: '', password: '',
     allowDomain: false, enableIcmp: true, enableBridge: false,
-    selectedBridge: null, legacySsh: false, icon: 'terminal', showPassword: false, error: null
+    selectedBridge: null, legacySsh: false, icon: 'terminal', showPassword: false,
+    targetFolderId: '', error: null
   };
 }
 function createBridgeForm() {
@@ -245,6 +278,7 @@ function createQuickConnectForm() {
 function handleRustMessage(msg) {
   switch (msg.type) {
     case 'config_data':
+      state.nodes = msg.nodes || [];
       state.hosts = msg.hosts || [];
       state.bridges = msg.bridges || [];
 
@@ -351,6 +385,29 @@ function handleRustMessage(msg) {
 
 //  Navigation / Router 
 
+function findHostFolderId(nodes, hostId) {
+  if (!nodes || !hostId) return '';
+  for (const node of nodes) {
+    if (node.type === 'folder') {
+      if (node.children) {
+        for (const child of node.children) {
+          if (child.type === 'host' && (child.data.id === hostId || child.data.name === hostId)) {
+            return node.id;
+          }
+          if (child.type === 'folder' && child.children) {
+            for (const sub of child.children) {
+              if (sub.type === 'host' && (sub.data.id === hostId || sub.data.name === hostId)) {
+                return child.id;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return '';
+}
+
 function navigate(view, params = {}) {
   // Reset context menu
   closeContextMenu();
@@ -358,9 +415,12 @@ function navigate(view, params = {}) {
   state.currentView = view;
 
   // Prepare forms when entering form views
-  if (view === 'new-host' && params.editIndex != null) {
-    state.editingHostIndex = params.editIndex;
-    const host = state.hosts[params.editIndex];
+  if (view === 'new-host' && (params.editIndex != null || params.hostId != null)) {
+    state.editingHostIndex = params.editIndex ?? null;
+    state.editingHostId = params.hostId ?? null;
+    const host = params.hostId
+      ? state.hosts.find(h => h.id === params.hostId)
+      : (params.editIndex != null ? state.hosts[params.editIndex] : null);
     if (host) {
       state.hostForm = {
         name: host.name, address: host.address, port: String(host.port),
@@ -368,11 +428,13 @@ function navigate(view, params = {}) {
         enableIcmp: host.enable_icmp ?? true, enableBridge: !!host.bridge_id,
         selectedBridge: host.bridge_id || null, legacySsh: host.legacy_ssh || false,
         icon: host.icon || 'terminal',
+        targetFolderId: findHostFolderId(state.nodes, host.id || host.name),
         showPassword: false, error: null,
       };
     }
   } else if (view === 'new-host') {
     state.editingHostIndex = null;
+    state.editingHostId = null;
     state.hostForm = createHostForm();
   }
 
@@ -521,46 +583,66 @@ function renderView() {
 
 function viewHome() {
   const query = (state.hostSearchQuery || '').trim().toLowerCase();
-  const hasHosts = state.hosts.length > 0;
+  const hasItems = state.nodes.length > 0 || state.hosts.length > 0;
 
-  // Filtra por nome ou endereço
+  // Filtra recursivamente por nome, endereço ou usuário em todas as pastas e subpastas
   const filteredHosts = query
     ? state.hosts.filter(h =>
       (h.name && h.name.toLowerCase().includes(query)) ||
-      (h.address && h.address.toLowerCase().includes(query))
+      (h.address && h.address.toLowerCase().includes(query)) ||
+      (h.username && h.username.toLowerCase().includes(query))
     )
     : state.hosts;
 
   let hostCardsHtml = '';
-  if (!hasHosts) {
+  if (!hasItems) {
     hostCardsHtml = `
       <div class="empty-state">
         ${icon('server', 48)}
-        <div class="empty-state-title">Nenhum host cadastrado</div>
-        <div class="empty-state-text">Clique em "Novo Host" para adicionar seu primeiro servidor.</div>
+        <div class="empty-state-title">Nenhum host ou pasta cadastrado</div>
+        <div class="empty-state-text">Clique em "Novo Host" ou "Nova Pasta" para começar a organizar seu ambiente.</div>
+        <div class="mt-4" style="display: flex; gap: var(--sp-2); justify-content: center;">
+          <button type="button" class="btn btn--secondary" onclick="openCreateFolderModal(null)">
+            ${icon('folder-plus', 16)} Nova Pasta
+          </button>
+          <button type="button" class="btn btn--primary" onclick="navigate('new-host')">
+            ${icon('plus', 16)} Novo Host
+          </button>
+        </div>
       </div>
     `;
-  } else if (filteredHosts.length === 0) {
-    hostCardsHtml = `
-      <div class="empty-state animate-fade-in">
-        ${icon('search', 44)}
-        <div class="empty-state-title">Nenhum host encontrado</div>
-        <div class="empty-state-text">Nenhum servidor corresponde à busca "<strong>${escHtml(state.hostSearchQuery)}</strong>".</div>
-        <button type="button" class="btn btn--secondary mt-4" onclick="clearHostSearch()">
-          ${icon('undo', 16)} Limpar Busca
-        </button>
-      </div>
-    `;
+  } else if (query) {
+    if (filteredHosts.length === 0) {
+      hostCardsHtml = `
+        <div class="empty-state animate-fade-in">
+          ${icon('search', 44)}
+          <div class="empty-state-title">Nenhum host encontrado</div>
+          <div class="empty-state-text">Nenhum servidor corresponde à busca "<strong>${escHtml(state.hostSearchQuery)}</strong>" em nenhuma das pastas.</div>
+          <button type="button" class="btn btn--secondary mt-4" onclick="clearHostSearch()">
+            ${icon('undo', 16)} Limpar Busca
+          </button>
+        </div>
+      `;
+    } else {
+      hostCardsHtml = `
+        <div class="host-list" id="host-list">
+          ${filteredHosts.map(h => hostCard(h, true, h.folder_path)).join('')}
+        </div>
+      `;
+    }
   } else {
+    // Exibição padrão hierárquica em árvore (Pastas, Subpastas e Hosts da raiz)
     hostCardsHtml = `
-      <div class="host-list" id="host-list">
-        ${filteredHosts.map(h => hostCard(h, state.hosts.indexOf(h), !!query)).join('')}
+      <div class="host-list" id="host-list"
+           ondragover="onRootDragOver(event)"
+           ondrop="onRootDrop(event)">
+        ${renderNodeTree(state.nodes)}
       </div>
     `;
   }
 
   // Barra de busca interativa
-  const searchSection = hasHosts || query ? `
+  const searchSection = hasItems || query ? `
     <div class="host-search-wrapper">
       <div class="host-search-container" id="host-search-container">
         <div class="host-search-icon-box" id="host-search-icon-box" title="Buscar host">
@@ -593,7 +675,7 @@ function viewHome() {
       </div>
       ${query ? `
         <div class="host-search-meta">
-          <span class="host-search-count">${filteredHosts.length} de ${state.hosts.length} ${state.hosts.length === 1 ? 'host' : 'hosts'}</span>
+          <span class="host-search-count">${filteredHosts.length} de ${state.hosts.length} ${state.hosts.length === 1 ? 'host encontrado' : 'hosts encontrados em todas as pastas'}</span>
           <button type="button" class="host-search-clear-link" onclick="clearHostSearch()">Limpar filtro</button>
         </div>
       ` : ''}
@@ -607,12 +689,15 @@ function viewHome() {
           <span class="page-title-icon">${icon('server', 28)}</span>
           <div>
             <h1 class="page-title">Seus Hosts</h1>
-            <p class="page-subtitle">Gerencie seus servidores e instâncias.</p>
+            <p class="page-subtitle">Gerencie e organize seus servidores em pastas e subpastas.</p>
           </div>
         </div>
         <div class="page-header-actions">
           <button type="button" class="btn btn--secondary" onclick="navigate('quick-connect')">
             ${icon('plug')} Conexão Rápida
+          </button>
+          <button type="button" class="btn btn--secondary" onclick="openCreateFolderModal(null)">
+            ${icon('folder-plus')} Nova Pasta
           </button>
           <button type="button" class="btn btn--primary" onclick="navigate('new-host')">
             ${icon('plus')} Novo Host
@@ -625,8 +710,151 @@ function viewHome() {
   `;
 }
 
-function hostCard(host, index, isFiltered = false) {
-  const icmpState = state.icmpStatus[String(index)];
+function renderNodeTree(nodes, level = 1, parentFolder = null) {
+  if (!nodes || nodes.length === 0) return '';
+  return nodes.map(node => {
+    if (node.type === 'host') {
+      return hostCard(node.data, false, parentFolder ? [parentFolder.name] : []);
+    } else if (node.type === 'folder') {
+      return folderCard(node, level, parentFolder);
+    }
+    return '';
+  }).join('');
+}
+
+function folderCard(folder, level = 1, parentFolder = null) {
+  const isCollapsed = !!state.collapsedFolders[folder.id];
+  const folderColor = folder.color || '#FF7300';
+  const folderIcon = folder.icon || 'folder';
+
+  // Contagem recursiva de hosts nesta pasta e suas subpastas
+  let directHosts = 0;
+  let subfolders = 0;
+  let totalHosts = 0;
+
+  function countRecursive(f) {
+    if (!f.children) return;
+    f.children.forEach(c => {
+      if (c.type === 'host') {
+        totalHosts++;
+      } else if (c.type === 'folder') {
+        countRecursive(c);
+      }
+    });
+  }
+  if (folder.children) {
+    folder.children.forEach(c => {
+      if (c.type === 'host') directHosts++;
+      else if (c.type === 'folder') subfolders++;
+    });
+    countRecursive(folder);
+  }
+
+  const badgeText = level === 1
+    ? `${totalHosts} ${totalHosts === 1 ? 'host' : 'hosts'}${subfolders > 0 ? ` • ${subfolders} ${subfolders === 1 ? 'subpasta' : 'subpastas'}` : ''}`
+    : `${directHosts} ${directHosts === 1 ? 'host' : 'hosts'}`;
+
+  // Se nível 1, permite criar subpasta. Se nível 2, NÃO permite criar subpasta (limite estrito de 2 níveis)
+  const canCreateSubfolder = level === 1;
+
+  const childrenHtml = folder.children && folder.children.length > 0
+    ? folder.children.map(child => {
+        if (child.type === 'folder') {
+          return `<div class="subfolder-wrapper">${folderCard(child, 2, folder)}</div>`;
+        } else if (child.type === 'host') {
+          return hostCard(child.data, false, [folder.name]);
+        }
+        return '';
+      }).join('')
+    : `<div class="folder-empty-drop-zone" data-folder-id="${folder.id}"
+            ondragover="onFolderDragOver(event, '${folder.id}')"
+            ondragleave="onFolderDragLeave(event, '${folder.id}')"
+            ondrop="onFolderDrop(event, '${folder.id}')">Pasta vazia. Arraste hosts aqui ou use "Mover para..."</div>`;
+
+  const isDraggable = !state.hostSearchQuery || !state.hostSearchQuery.trim();
+  const parentId = parentFolder ? parentFolder.id : '';
+
+  return `
+    <div class="folder-card ${level === 2 ? 'folder-card--subfolder' : ''} ${isCollapsed ? 'is-collapsed' : ''}"
+         data-folder-id="${folder.id}"
+         data-parent-id="${escAttr(parentId)}"
+         data-level="${level}"
+         ${isDraggable ? 'draggable="true"' : ''}
+         ondragstart="onFolderDragStart(event, '${folder.id}', '${escAttr(parentId)}')"
+         ondragend="onFolderDragEnd(event)">
+      <div class="folder-header" onclick="onFolderHeaderClick(event, '${folder.id}')"
+           ondragover="onFolderDragOver(event, '${folder.id}')"
+           ondragleave="onFolderDragLeave(event, '${folder.id}')"
+           ondrop="onFolderDrop(event, '${folder.id}')">
+        ${isDraggable ? `
+          <div class="folder-drag-handle" title="Arraste para reordenar esta pasta">
+            ${icon('grip-vertical', 16)}
+          </div>
+        ` : `
+          <div class="folder-drag-handle folder-drag-handle--disabled" title="Limpe a busca para reorganizar">
+            ${icon('grip-vertical', 16)}
+          </div>
+        `}
+        <div class="folder-chevron">
+          ${icon('chevron-right', 18)}
+        </div>
+        <div class="folder-icon" style="background: ${folderColor}20; color: ${folderColor};">
+          ${icon(folderIcon, level === 1 ? 20 : 18)}
+        </div>
+        <div class="folder-title-box">
+          <div class="folder-title-row">
+            <span class="folder-name">${escHtml(folder.name)}</span>
+            ${level === 2 ? `<span class="folder-badge">Subpasta</span>` : ''}
+          </div>
+          <div class="folder-badges">
+            <span class="folder-badge folder-badge--accent">${badgeText}</span>
+          </div>
+        </div>
+        <div class="folder-actions" onclick="event.stopPropagation()">
+          ${canCreateSubfolder ? `
+            <button type="button" class="btn btn--icon" onclick="openCreateFolderModal('${folder.id}', '${escAttr(folder.name)}')" title="Nova Subpasta">
+              ${icon('plus', 16)}
+            </button>
+          ` : ''}
+          <button type="button" class="btn btn--icon" onclick="openEditFolderModal('${folder.id}')" title="Editar Pasta">
+            ${icon('edit', 16)}
+          </button>
+          <button type="button" class="btn btn--icon btn--icon-danger" onclick="confirmDeleteFolder('${folder.id}', '${escAttr(folder.name)}', ${totalHosts})" title="Excluir Pasta">
+            ${icon('trash', 16)}
+          </button>
+        </div>
+      </div>
+      <div class="folder-content" data-folder-id="${folder.id}"
+           ondragover="onFolderDragOver(event, '${folder.id}')"
+           ondragleave="onFolderDragLeave(event, '${folder.id}')"
+           ondrop="onFolderDrop(event, '${folder.id}')">
+        ${childrenHtml}
+      </div>
+    </div>
+  `;
+}
+
+function onFolderHeaderClick(e, folderId) {
+  if (isDraggingFolder || isDraggingHost) return;
+  if (e.target.closest('.folder-actions') || e.target.closest('.folder-drag-handle') || e.target.closest('button')) return;
+  toggleFolderCollapse(folderId);
+}
+
+function toggleFolderCollapse(folderId) {
+  state.collapsedFolders[folderId] = !state.collapsedFolders[folderId];
+  const folderEl = document.querySelector(`.folder-card[data-folder-id="${folderId}"]`);
+  if (folderEl) {
+    if (state.collapsedFolders[folderId]) {
+      folderEl.classList.add('is-collapsed');
+    } else {
+      folderEl.classList.remove('is-collapsed');
+    }
+  }
+}
+
+function hostCard(host, isFiltered = false, folderPath = null) {
+  const hostId = host.id || host.name;
+  const icmpState = state.icmpStatus[hostId] ?? state.icmpStatus[host.name];
   let iconClass = '';
   if (host.enable_icmp && state.clientConfig.global_icmp) {
     if (icmpState === true) iconClass = 'host-icon-wrapper--online';
@@ -636,19 +864,24 @@ function hostCard(host, index, isFiltered = false) {
   const bridgeTag = host.bridge_id
     ? `<span class="bridge-indicator">${icon('network', 12)} Ponte</span>` : '';
 
+  const pathBadge = (folderPath && folderPath.length > 0)
+    ? `<span class="host-path-badge" title="Pasta: ${escAttr(folderPath.join(' › '))}">${icon('folder', 12)} ${escHtml(folderPath.join(' › '))}</span>`
+    : (isFiltered ? `<span class="host-path-badge host-path-badge--root" title="Host na raiz">${icon('home', 12)} Raiz</span>` : '');
+
   const hostIcon = host.icon || 'terminal';
   const isDraggable = !isFiltered;
 
   return `
-    <div class="host-item stagger-item ${isFiltered ? 'is-filtered' : ''}" data-host-index="${index}" ${isDraggable ? 'draggable="true"' : ''}
+    <div class="host-item stagger-item ${isFiltered ? 'is-filtered' : ''}" data-host-id="${escAttr(hostId)}" ${isDraggable ? 'draggable="true"' : ''}
+         ${isDraggable ? `ondragstart="onHostDragStart(event, '${escAttr(hostId)}')" ondragend="onHostDragEnd(event)"` : ''}
          onclick="onHostCardClick(event, '${escAttr(host.name)}')"
-         oncontextmenu="showHostContextMenu(event, ${index})">
+         oncontextmenu="showHostContextMenu(event, '${escAttr(hostId)}')">
       ${isDraggable ? `
-        <div class="host-drag-handle" title="Arraste para reordenar">
+        <div class="host-drag-handle" title="Arraste para mover ou reordenar">
           ${icon('grip-vertical', 16)}
         </div>
       ` : `
-        <div class="host-drag-handle host-drag-handle--disabled" title="Limpe a busca para reorganizar a lista">
+        <div class="host-drag-handle host-drag-handle--disabled" title="Limpe a busca para reorganizar">
           ${icon('grip-vertical', 16)}
         </div>
       `}
@@ -659,12 +892,16 @@ function hostCard(host, index, isFiltered = false) {
         <div class="host-name">${escHtml(host.name)}</div>
         <div class="host-detail">${escHtml(host.username)}@${escHtml(host.address)}:${host.port}</div>
       </div>
+      ${pathBadge ? `<div>${pathBadge}</div>` : ''}
       ${bridgeTag ? `<div class="host-meta">${bridgeTag}</div>` : ''}
       <div class="host-actions">
-        <button type="button" class="btn btn--icon" onclick="event.stopPropagation(); navigate('new-host', { editIndex: ${index} })" title="Editar">
+        <button type="button" class="btn btn--icon" onclick="event.stopPropagation(); openMoveHostModal('${escAttr(hostId)}', '${escAttr(host.name)}')" title="Mover para...">
+          ${icon('folder-symlink', 16)}
+        </button>
+        <button type="button" class="btn btn--icon" onclick="event.stopPropagation(); navigate('new-host', { hostId: '${escAttr(hostId)}' })" title="Editar">
           ${icon('edit', 16)}
         </button>
-        <button type="button" class="btn btn--icon btn--icon-danger" onclick="event.stopPropagation(); confirmDeleteHost(${index})" title="Excluir">
+        <button type="button" class="btn btn--icon btn--icon-danger" onclick="event.stopPropagation(); confirmDeleteHost('${escAttr(hostId)}', '${escAttr(host.name)}')" title="Excluir">
           ${icon('trash', 16)}
         </button>
       </div>
@@ -674,12 +911,12 @@ function hostCard(host, index, isFiltered = false) {
 
 function updateIcmpIndicators() {
   document.querySelectorAll('.host-item').forEach(el => {
-    const idx = el.dataset.hostIndex;
-    const host = state.hosts[idx];
+    const hid = el.dataset.hostId;
+    const host = state.hosts.find(h => h.id === hid || h.name === hid);
     if (!host || !host.enable_icmp || !state.clientConfig.global_icmp) return;
     const wrapper = el.querySelector('.host-icon-wrapper');
     if (!wrapper) return;
-    const icmpState = state.icmpStatus[String(idx)];
+    const icmpState = state.icmpStatus[hid] ?? state.icmpStatus[host.name];
     wrapper.classList.remove('host-icon-wrapper--online', 'host-icon-wrapper--offline');
     if (icmpState === true) wrapper.classList.add('host-icon-wrapper--online');
     else if (icmpState === false) wrapper.classList.add('host-icon-wrapper--offline');
@@ -725,6 +962,33 @@ function viewNewHost() {
          <p class="input-hint">Deixe em branco para usar autenticação por chave.</p>
        </div>`;
 
+  const hasFolders = (state.nodes || []).some(n => n.type === 'folder');
+  let folderOptions = `<option value="">Raiz (Sem pasta)</option>`;
+  if (hasFolders) {
+    state.nodes.forEach(n => {
+      if (n.type === 'folder') {
+        folderOptions += `<option value="${n.id}" ${f.targetFolderId === n.id ? 'selected' : ''}>📁 ${escHtml(n.name)}</option>`;
+        if (n.children) {
+          n.children.forEach(sub => {
+            if (sub.type === 'folder') {
+              folderOptions += `<option value="${sub.id}" ${f.targetFolderId === sub.id ? 'selected' : ''}>&nbsp;&nbsp;↳ 📁 ${escHtml(sub.name)}</option>`;
+            }
+          });
+        }
+      }
+    });
+  }
+
+  const folderSection = hasFolders
+    ? `<div class="input-group">
+         <label class="input-label">${icon('folder')} Pasta de Destino</label>
+         <div class="select-wrapper">
+           <select class="select" data-bind="hostForm.targetFolderId">${folderOptions}</select>
+         </div>
+         <p class="input-hint">Escolha em qual pasta ou subpasta este host será organizado.</p>
+       </div>`
+    : '';
+
   const errorHtml = f.error ? `<div class="error-box">${icon('x', 16)} ${escHtml(f.error)}</div>` : '';
 
   return `
@@ -767,24 +1031,17 @@ function viewNewHost() {
             <!-- Menu Suspenso Tema Escuro -->
             <div class="host-icon-dropdown-menu" id="host-icon-menu">
               <div class="host-icon-menu-header">
-                <div class="host-icon-menu-title">
-                  ${icon('sparkles', 15)}
-                  <span>Escolha um Ícone para o Host</span>
-                </div>
-                <button type="button" class="host-icon-menu-close-btn" onclick="closeHostIconMenu(event)" title="Fechar menu">
-                  ${icon('x', 14)}
-                </button>
+                <span class="host-icon-menu-title">${icon('palette', 14)} Escolha um ícone para o host</span>
+                <span class="host-icon-menu-close" onclick="closeHostIconMenu(event)" title="Fechar">${icon('x', 14)}</span>
               </div>
               <div class="host-icon-grid" id="host-icon-grid">
                 ${HOST_AVAILABLE_ICONS.map(item => `
-                  <button type="button" 
-                          class="host-icon-option ${item.id === (f.icon || 'terminal') ? 'selected' : ''}" 
+                  <button type="button" class="host-icon-grid-item ${item.id === (f.icon || 'terminal') ? 'selected' : ''}"
                           onclick="selectHostIcon('${item.id}', event)"
-                          title="${item.label}">
-                    <div class="host-icon-option-svg-box">
-                      ${icon(item.id, 22)}
-                    </div>
-                    <span class="host-icon-option-label">${item.label}</span>
+                          title="${item.label}"
+                          data-icon-id="${item.id}">
+                    <span class="host-icon-grid-preview">${icon(item.id, 22)}</span>
+                    <span class="host-icon-grid-name">${item.label}</span>
                   </button>
                 `).join('')}
               </div>
@@ -793,7 +1050,7 @@ function viewNewHost() {
         </div>
 
         <div class="input-group">
-          <label class="input-label">${icon('monitor')} Apelido / Nome</label>
+          <label class="input-label">${icon('tag')} Nome / Apelido</label>
           <input class="input" type="text" placeholder="Ex: Servidor Prod"
                  data-bind="hostForm.name" value="${escAttr(f.name)}" autofocus>
         </div>
@@ -823,6 +1080,8 @@ function viewNewHost() {
         </div>
 
         ${passwordSection}
+
+        ${folderSection}
 
         <div class="input-group">
           ${checkbox('hostForm.enableBridge', f.enableBridge, 'Habilitar ponte (Jump Host)')}
@@ -857,7 +1116,7 @@ function submitHostForm() {
   if (!f.address.trim()) { f.error = 'O endereço é obrigatório.'; renderView(); return; }
   if (!f.username.trim()) { f.error = 'O nome de usuário é obrigatório.'; renderView(); return; }
   const port = parseInt(f.port, 10);
-  if (!port || port < 1 || port > 65535) { f.error = 'Porta inválida (1�65535).'; renderView(); return; }
+  if (!port || port < 1 || port > 65535) { f.error = 'Porta inválida (1–65535).'; renderView(); return; }
 
   IPC.saveHost({
     name: f.name.trim(), address: f.address.trim(), port,
@@ -866,7 +1125,7 @@ function submitHostForm() {
     bridge_id: f.enableBridge ? f.selectedBridge : null,
     legacy_ssh: f.legacySsh,
     icon: f.icon || 'terminal',
-  }, state.editingHostIndex);
+  }, state.editingHostIndex, state.editingHostId, f.targetFolderId || null);
 }
 
 function toggleHostIconMenu(e) {
@@ -1234,8 +1493,8 @@ function viewSettings() {
       <div class="settings-group mb-6">
         <div class="about-grid">
           ${aboutRow('Nome do Cliente', 'RusTTY')}
-          ${aboutRow('Versão do Cliente', 'v2.0.0')}
-          ${aboutRow('Data da Versão', '19/09/2026')}
+          ${aboutRow('Versão do Cliente', 'v2.1.0')}
+          ${aboutRow('Data da Versão', '20/09/2026')}
           ${aboutRow('Licença', 'GNU Affero General Public License v3')}
           ${aboutRow('Desenvolvedor', 'Vitor')}
           ${aboutRow('Co-desenvolvedor', ' ')}
@@ -1630,6 +1889,45 @@ function onCheckboxChange(bindKey, isChecked) {
     return;
   }
 
+  // Se "SSH Legacy" for marcado na criação ou edição de host
+  if (bindKey === 'hostForm.legacySsh') {
+    if (isChecked) {
+      if (state.clientConfig && state.clientConfig.ignore_security_warnings) {
+        obj[parts[parts.length - 1]] = true;
+        return;
+      }
+
+      // Reverte no DOM temporariamente enquanto aguarda confirmação com countdown
+      obj[parts[parts.length - 1]] = false;
+      const chk = document.querySelector('input[type="checkbox"][onchange*="hostForm.legacySsh"]');
+      if (chk) chk.checked = false;
+
+      showSecurityWarningModal({
+        title: 'Aviso de Segurança: SSH Legado',
+        badgeText: 'PROTOCOLO ANTIGO',
+        descriptionText: 'O modo <strong>SSH Legacy</strong> utiliza protocolos antigos de SSH que podem não ser seguros e expor a conexão. Utilize apenas se o host não possuir suporte aos padrões modernos de SSH.',
+        risks: [],
+        countdownSeconds: 5,
+        confirmButtonText: 'Confirmar',
+        onConfirm: () => {
+          state.hostForm.legacySsh = true;
+          const currentChk = document.querySelector('input[type="checkbox"][onchange*="hostForm.legacySsh"]');
+          if (currentChk) currentChk.checked = true;
+          Toast.show('Modo SSH Legado ativado para este host.', 'warning');
+        },
+        onCancel: () => {
+          state.hostForm.legacySsh = false;
+          const currentChk = document.querySelector('input[type="checkbox"][onchange*="hostForm.legacySsh"]');
+          if (currentChk) currentChk.checked = false;
+        }
+      });
+      return;
+    } else {
+      obj[parts[parts.length - 1]] = false;
+      return;
+    }
+  }
+
   // Se divisão de IP público/privado mudou, atualiza a view para alternar os pickers
   if (bindKey === 'ipForm.split') {
     renderView();
@@ -1679,6 +1977,43 @@ function toggleSwitch(settingKey, checked) {
 
 function toggleSetting(key, isChecked) {
   const newVal = isChecked !== undefined ? isChecked : !state.clientConfig[key];
+
+  // Intercepta a opção de desativar os avisos de segurança globais
+  if (key === 'ignore_security_warnings') {
+    if (newVal) {
+      // Reverte visualmente no DOM enquanto aguarda confirmação com cooldown de 10s
+      const switchEl = document.querySelector(`input[onchange*="${key}"]`);
+      if (switchEl) switchEl.checked = false;
+
+      showSecurityWarningModal({
+        title: 'Desativar Avisos de Segurança?',
+        badgeText: 'CONFIGURAÇÃO AVANÇADA',
+        descriptionText: 'Ao desativar os avisos de segurança, o RusTTY não exibirá confirmações ou alertas de risco ao habilitar conexões antigas como o SSH Legado.',
+        risks: [],
+        countdownSeconds: 10,
+        confirmButtonText: 'Confirmar',
+        onConfirm: () => {
+          state.clientConfig[key] = true;
+          IPC.saveSetting(key, true);
+          renderView();
+          Toast.show('Avisos de segurança desativados.', 'warning');
+        },
+        onCancel: () => {
+          state.clientConfig[key] = false;
+          renderView();
+        }
+      });
+      return;
+    } else {
+      // Ao desativar o bypass (reativando os avisos), salva diretamente
+      state.clientConfig[key] = false;
+      IPC.saveSetting(key, false);
+      renderView();
+      Toast.show('Avisos de segurança reativados.', 'success');
+      return;
+    }
+  }
+
   state.clientConfig[key] = newVal;
   IPC.saveSetting(key, newVal);
 
@@ -1688,18 +2023,34 @@ function toggleSetting(key, isChecked) {
   }
 }
 
-// Modals 
+// ─── Modals ──────────────────────────────────────────────────────────────────
 
-function showModal(html) {
+let activeSecurityModalTimer = null;
+let activeSecurityModalCancelCb = null;
+
+function clearSecurityModalState() {
+  if (activeSecurityModalTimer) {
+    clearInterval(activeSecurityModalTimer);
+    activeSecurityModalTimer = null;
+  }
+  if (activeSecurityModalCancelCb) {
+    const cb = activeSecurityModalCancelCb;
+    activeSecurityModalCancelCb = null;
+    cb();
+  }
+}
+
+function showModal(html, extraClass = '') {
   const overlay = document.getElementById('modal-overlay');
   const content = document.getElementById('modal-content');
   if (!overlay || !content) return;
-  content.className = 'modal-content';
+  content.className = 'modal-content' + (extraClass ? ' ' + extraClass : '');
   content.innerHTML = html;
   overlay.classList.add('visible');
 }
 
 function hideModal() {
+  clearSecurityModalState();
   const overlay = document.getElementById('modal-overlay');
   const content = document.getElementById('modal-content');
   if (overlay) overlay.classList.remove('visible');
@@ -1710,6 +2061,109 @@ function hideModal() {
       content.innerHTML = '';
     }
   }, 250);
+}
+
+function showSecurityWarningModal({
+  title,
+  badgeText = 'AVISO',
+  descriptionText,
+  risks = [],
+  countdownSeconds = 5,
+  confirmButtonText = 'Confirmar',
+  onConfirm,
+  onCancel,
+}) {
+  // Limpa qualquer estado anterior
+  clearSecurityModalState();
+  activeSecurityModalCancelCb = onCancel || null;
+  let remaining = countdownSeconds;
+
+  const risksHtml = risks.length > 0 ? `
+    <div class="security-risks-section">
+      <div class="security-risks-title">
+        ${icon('alert-triangle', 16)} Principais Riscos:
+      </div>
+      <ul class="security-risks-list">
+        ${risks.map(r => `
+          <li>
+            <span class="risk-bullet"></span>
+            <div class="risk-item-content">
+              <strong>${r.title}:</strong> ${r.detail}
+            </div>
+          </li>
+        `).join('')}
+      </ul>
+    </div>
+  ` : '';
+
+  const html = `
+    <div class="modal-header modal-header--security">
+      <div class="security-header-left">
+        <div class="security-badge-icon">
+          ${icon('shield-alert', 24)}
+        </div>
+        <div>
+          <div class="security-badge-tag">${badgeText}</div>
+          <h3 class="security-modal-title">${title}</h3>
+        </div>
+      </div>
+      <button type="button" class="btn btn--icon" onclick="hideModal()">${icon('x', 18)}</button>
+    </div>
+
+    <div class="modal-body security-modal-body">
+      <div class="security-warning-box">
+        <div class="security-warning-desc">${descriptionText}</div>
+      </div>
+
+      ${risksHtml}
+    </div>
+
+    <div class="modal-actions security-modal-actions">
+      <button type="button" class="btn btn--ghost" onclick="hideModal()">
+        Cancelar
+      </button>
+      <button type="button" id="security-confirm-btn" class="btn btn--danger btn--danger-countdown" disabled onclick="onSecurityConfirmClicked()">
+        <span id="security-confirm-label">${confirmButtonText} (${remaining}s)</span>
+      </button>
+    </div>
+  `;
+
+  window.onSecurityConfirmClicked = function () {
+    const btn = document.getElementById('security-confirm-btn');
+    if (!btn || btn.disabled) return;
+    if (activeSecurityModalTimer) {
+      clearInterval(activeSecurityModalTimer);
+      activeSecurityModalTimer = null;
+    }
+    activeSecurityModalCancelCb = null;
+    hideModal();
+    if (typeof onConfirm === 'function') {
+      onConfirm();
+    }
+  };
+
+  showModal(html, 'modal-content--security');
+
+  activeSecurityModalTimer = setInterval(() => {
+    remaining--;
+    const label = document.getElementById('security-confirm-label');
+    const btn = document.getElementById('security-confirm-btn');
+
+    if (!btn) {
+      clearInterval(activeSecurityModalTimer);
+      activeSecurityModalTimer = null;
+      return;
+    }
+
+    if (remaining > 0) {
+      if (label) label.textContent = `${confirmButtonText} (${remaining}s)`;
+    } else {
+      clearInterval(activeSecurityModalTimer);
+      activeSecurityModalTimer = null;
+      btn.disabled = false;
+      if (label) label.textContent = confirmButtonText;
+    }
+  }, 1000);
 }
 
 // ─── Celebration Confetti System ─────────────────────────────────────────────
@@ -1899,12 +2353,368 @@ function onCelebrateYayClick() {
   }, 450);
 }
 
-function confirmDeleteHost(index) {
-  const host = state.hosts[index];
-  if (!host) return;
+// ─── Folder Modals & Management ─────────────────────────────────────────────
+
+let currentFolderModalState = {
+  parentId: null,
+  folderId: null,
+  name: '',
+  icon: 'folder',
+  color: '#FF7300'
+};
+
+function selectFolderModalIcon(iconName) {
+  currentFolderModalState.icon = iconName;
+  document.querySelectorAll('.folder-icon-btn').forEach(btn => {
+    btn.classList.toggle('is-selected', btn.dataset.icon === iconName);
+  });
+}
+
+function selectFolderModalColor(colorHex) {
+  currentFolderModalState.color = colorHex;
+  document.querySelectorAll('.folder-color-swatch').forEach(btn => {
+    btn.classList.toggle('is-selected', btn.dataset.color === colorHex);
+  });
+}
+
+function openCreateFolderModal(parentId = null, parentName = '') {
+  currentFolderModalState = {
+    parentId: parentId || null,
+    folderId: null,
+    name: '',
+    icon: 'folder',
+    color: '#FF7300'
+  };
+
+  const isSubfolder = !!parentId;
+  const title = isSubfolder ? `Nova Subpasta em "${escHtml(parentName)}"` : 'Nova Pasta';
+  const subtitle = isSubfolder
+    ? 'Subpastas organizam hosts em um segundo nível hierárquico.'
+    : 'Crie uma pasta principal para agrupar e personalizar seus hosts.';
+
+  const iconButtons = FOLDER_AVAILABLE_ICONS.map(ic => `
+    <button type="button" class="folder-icon-btn ${ic === currentFolderModalState.icon ? 'is-selected' : ''}"
+            data-icon="${ic}" onclick="selectFolderModalIcon('${ic}')" title="${ic}">
+      ${icon(ic, 20)}
+    </button>
+  `).join('');
+
+  const colorButtons = FOLDER_COLORS.map(c => `
+    <button type="button" class="folder-color-swatch ${c.value === currentFolderModalState.color ? 'is-selected' : ''}"
+            data-color="${c.value}" style="background: ${c.value};" onclick="selectFolderModalColor('${c.value}')" title="${escAttr(c.name)}">
+    </button>
+  `).join('');
+
   showModal(`
     <div class="modal-header">
-      <div class="modal-title modal-title--danger">${icon('alert-triangle', 22)} Deletar "${escHtml(host.name)}"?</div>
+      <div class="modal-title">${icon('folder-plus', 22)} ${title}</div>
+      <button type="button" class="btn btn--icon" onclick="hideModal()">${icon('x', 18)}</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-desc">${subtitle}</p>
+      
+      <div class="input-group mt-3">
+        <label class="input-label">${icon('edit', 14)} Nome da Pasta</label>
+        <input class="input" type="text" id="folder-modal-name" placeholder="Ex: Produção, Bancos de Dados, AWS..." autofocus
+               onkeydown="if(event.key === 'Enter') submitCreateFolder()">
+      </div>
+
+      <div class="input-group mt-3">
+        <label class="input-label">${icon('sparkles', 14)} Cor da Pasta</label>
+        <div class="folder-color-grid">
+          ${colorButtons}
+        </div>
+      </div>
+
+      <div class="input-group mt-3">
+        <label class="input-label">${icon('folder', 14)} Ícone da Pasta</label>
+        <div class="folder-icon-grid">
+          ${iconButtons}
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn--ghost" onclick="hideModal()">Cancelar</button>
+      <button type="button" class="btn btn--primary" onclick="submitCreateFolder()">
+        ${icon('save', 16)} ${isSubfolder ? 'Criar Subpasta' : 'Criar Pasta'}
+      </button>
+    </div>
+  `);
+
+  setTimeout(() => {
+    const input = document.getElementById('folder-modal-name');
+    if (input) input.focus();
+  }, 100);
+}
+
+function submitCreateFolder() {
+  const input = document.getElementById('folder-modal-name');
+  const name = input ? input.value.trim() : '';
+  if (!name) {
+    if (input) input.focus();
+    Toast.show('Digite o nome da pasta.', 'warning');
+    return;
+  }
+
+  IPC.saveFolder({
+    parent_id: currentFolderModalState.parentId,
+    name: name,
+    icon: currentFolderModalState.icon,
+    color: currentFolderModalState.color
+  });
+
+  hideModal();
+  Toast.show(currentFolderModalState.parentId ? 'Subpasta criada com sucesso!' : 'Pasta criada com sucesso!', 'success');
+}
+
+function findFolderInNodes(nodes, folderId) {
+  if (!nodes || !folderId) return null;
+  for (const node of nodes) {
+    if (node.type === 'folder') {
+      if (node.id === folderId) return node;
+      if (node.children) {
+        const found = findFolderInNodes(node.children, folderId);
+        if (found) return found;
+      }
+    }
+  }
+  return null;
+}
+
+function openEditFolderModal(folderId) {
+  const folder = findFolderInNodes(state.nodes, folderId);
+  if (!folder) return;
+
+  currentFolderModalState = {
+    folderId: folder.id,
+    parentId: folder.parent_id || null,
+    name: folder.name,
+    icon: folder.icon || 'folder',
+    color: folder.color || '#FF7300'
+  };
+
+  const iconButtons = FOLDER_AVAILABLE_ICONS.map(ic => `
+    <button type="button" class="folder-icon-btn ${ic === currentFolderModalState.icon ? 'is-selected' : ''}"
+            data-icon="${ic}" onclick="selectFolderModalIcon('${ic}')" title="${ic}">
+      ${icon(ic, 20)}
+    </button>
+  `).join('');
+
+  const colorButtons = FOLDER_COLORS.map(c => `
+    <button type="button" class="folder-color-swatch ${c.value === currentFolderModalState.color ? 'is-selected' : ''}"
+            data-color="${c.value}" style="background: ${c.value};" onclick="selectFolderModalColor('${c.value}')" title="${escAttr(c.name)}">
+    </button>
+  `).join('');
+
+  showModal(`
+    <div class="modal-header">
+      <div class="modal-title">${icon('edit', 22)} Editar Pasta "${escHtml(folder.name)}"</div>
+      <button type="button" class="btn btn--icon" onclick="hideModal()">${icon('x', 18)}</button>
+    </div>
+    <div class="modal-body">
+      <div class="input-group">
+        <label class="input-label">${icon('edit', 14)} Nome da Pasta</label>
+        <input class="input" type="text" id="folder-modal-name" value="${escAttr(folder.name)}"
+               onkeydown="if(event.key === 'Enter') submitEditFolder('${folder.id}')">
+      </div>
+
+      <div class="input-group mt-3">
+        <label class="input-label">${icon('sparkles', 14)} Cor da Pasta</label>
+        <div class="folder-color-grid">
+          ${colorButtons}
+        </div>
+      </div>
+
+      <div class="input-group mt-3">
+        <label class="input-label">${icon('folder', 14)} Ícone da Pasta</label>
+        <div class="folder-icon-grid">
+          ${iconButtons}
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn--ghost" onclick="hideModal()">Cancelar</button>
+      <button type="button" class="btn btn--primary" onclick="submitEditFolder('${folder.id}')">
+        ${icon('save', 16)} Salvar Alterações
+      </button>
+    </div>
+  `);
+
+  setTimeout(() => {
+    const input = document.getElementById('folder-modal-name');
+    if (input) { input.focus(); input.select(); }
+  }, 100);
+}
+
+function submitEditFolder(folderId) {
+  const input = document.getElementById('folder-modal-name');
+  const name = input ? input.value.trim() : '';
+  if (!name) {
+    if (input) input.focus();
+    Toast.show('Digite o nome da pasta.', 'warning');
+    return;
+  }
+
+  IPC.saveFolder({
+    folder_id: folderId,
+    name: name,
+    icon: currentFolderModalState.icon,
+    color: currentFolderModalState.color
+  });
+
+  hideModal();
+  Toast.show('Pasta atualizada com sucesso!', 'success');
+}
+
+function confirmDeleteFolder(folderId, folderName, totalHosts) {
+  if (totalHosts > 0) {
+    showModal(`
+      <div class="modal-header">
+        <div class="modal-title modal-title--danger">${icon('alert-triangle', 22)} Excluir Pasta "${escHtml(folderName)}"?</div>
+        <button type="button" class="btn btn--icon" onclick="hideModal()">${icon('x', 18)}</button>
+      </div>
+      <div class="modal-body">
+        <p>Esta pasta contém <strong>${totalHosts} ${totalHosts === 1 ? 'host salvo' : 'hosts salvos'}</strong>.</p>
+        <p class="mt-2">Você pode manter os seus hosts movendo-os com segurança para a raiz, ou excluir permanentemente a pasta junto com seus hosts.</p>
+      </div>
+      <div class="modal-actions" style="flex-direction: column; gap: var(--sp-2);">
+        <button type="button" class="btn btn--primary btn--full" onclick="hideModal(); IPC.deleteFolder('${folderId}', true); Toast.show('Pasta excluída. Hosts movidos para a raiz.', 'info')">
+          ${icon('folder-symlink', 16)} Manter Hosts (Mover para a Raiz)
+        </button>
+        <button type="button" class="btn btn--danger btn--full" onclick="hideModal(); IPC.deleteFolder('${folderId}', false); Toast.show('Pasta e hosts excluídos permanentemente.', 'warning')">
+          ${icon('trash', 16)} Excluir pasta e todos os hosts
+        </button>
+        <button type="button" class="btn btn--ghost btn--full" onclick="hideModal()">
+          Cancelar
+        </button>
+      </div>
+    `);
+  } else {
+    showModal(`
+      <div class="modal-header">
+        <div class="modal-title modal-title--danger">${icon('alert-triangle', 22)} Excluir Pasta "${escHtml(folderName)}"?</div>
+        <button type="button" class="btn btn--icon" onclick="hideModal()">${icon('x', 18)}</button>
+      </div>
+      <div class="modal-body">
+        <p>Esta pasta está vazia. Tem certeza que deseja removê-la?</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn--ghost" onclick="hideModal()">Cancelar</button>
+        <button type="button" class="btn btn--danger" onclick="hideModal(); IPC.deleteFolder('${folderId}', true); Toast.show('Pasta removida.', 'info')">
+          ${icon('trash', 16)} Excluir Pasta
+        </button>
+      </div>
+    `);
+  }
+}
+
+function openMoveHostModal(hostId, hostName) {
+  const host = state.hosts.find(h => h.id === hostId || h.name === hostId);
+  const currentPath = host && host.folder_path ? host.folder_path : [];
+
+  let destinations = [];
+
+  // Raiz
+  const isCurrentlyRoot = currentPath.length === 0;
+  destinations.push(`
+    <button type="button" class="destination-item destination-item--root ${isCurrentlyRoot ? 'is-current' : ''}"
+            onclick="executeMoveHost('${escAttr(hostId)}', null)">
+      <div class="destination-icon" style="background: rgba(255, 115, 0, 0.15); color: var(--color-accent);">
+        ${icon('home', 18)}
+      </div>
+      <div class="destination-info">
+        <div class="destination-title">Raiz (Sem pasta)</div>
+        <div class="destination-sub">${isCurrentlyRoot ? '✓ Local atual' : 'Mover para o nível principal'}</div>
+      </div>
+    </button>
+  `);
+
+  // Pastas e Subpastas
+  if (state.nodes) {
+    state.nodes.forEach(node => {
+      if (node.type === 'folder') {
+        const folderColor = node.color || '#FF7300';
+        const folderIcon = node.icon || 'folder';
+        const isCurrent = currentPath.length === 1 && currentPath[0] === node.name;
+        destinations.push(`
+          <button type="button" class="destination-item ${isCurrent ? 'is-current' : ''}"
+                  onclick="executeMoveHost('${escAttr(hostId)}', '${node.id}')">
+            <div class="destination-icon" style="background: ${folderColor}20; color: ${folderColor};">
+              ${icon(folderIcon, 18)}
+            </div>
+            <div class="destination-info">
+              <div class="destination-title">${escHtml(node.name)}</div>
+              <div class="destination-sub">${isCurrent ? '✓ Local atual' : 'Pasta Principal'}</div>
+            </div>
+          </button>
+        `);
+
+        if (node.children) {
+          node.children.forEach(sub => {
+            if (sub.type === 'folder') {
+              const subColor = sub.color || folderColor;
+              const subIcon = sub.icon || 'folder';
+              const isSubCurrent = currentPath.length === 2 && currentPath[0] === node.name && currentPath[1] === sub.name;
+              destinations.push(`
+                <button type="button" class="destination-item destination-item--subfolder ${isSubCurrent ? 'is-current' : ''}"
+                        onclick="executeMoveHost('${escAttr(hostId)}', '${sub.id}')">
+                  <div class="destination-icon" style="background: ${subColor}20; color: ${subColor};">
+                    ${icon(subIcon, 16)}
+                  </div>
+                  <div class="destination-info">
+                    <div class="destination-title">${escHtml(sub.name)}</div>
+                    <div class="destination-sub">${isSubCurrent ? '✓ Local atual' : `Subpasta de ${escHtml(node.name)}`}</div>
+                  </div>
+                </button>
+              `);
+            }
+          });
+        }
+      }
+    });
+  }
+
+  showModal(`
+    <div class="modal-header">
+      <div class="modal-title">${icon('folder-symlink', 22)} Mover "${escHtml(hostName || 'Host')}"</div>
+      <button type="button" class="btn btn--icon" onclick="hideModal()">${icon('x', 18)}</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-desc">Selecione para qual pasta ou subpasta deseja mover este host:</p>
+      <div class="destination-list">
+        ${destinations.join('')}
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn--ghost" onclick="hideModal()">Cancelar</button>
+    </div>
+  `);
+}
+
+function executeMoveHost(hostId, targetFolderId) {
+  IPC.moveHost(hostId, targetFolderId || null, null);
+  hideModal();
+  Toast.show(targetFolderId ? 'Host movido para a pasta com sucesso!' : 'Host movido para a raiz!', 'success');
+}
+
+function confirmDeleteHost(identifier, optionalName = null) {
+  let host = null;
+  let hostId = null;
+  let index = null;
+  if (typeof identifier === 'number') {
+    index = identifier;
+    host = state.hosts[index];
+    hostId = host ? host.id : null;
+  } else {
+    hostId = String(identifier);
+    host = state.hosts.find(h => h.id === hostId || h.name === hostId);
+    index = host ? state.hosts.indexOf(host) : null;
+  }
+  const name = optionalName || (host ? host.name : 'Host');
+
+  showModal(`
+    <div class="modal-header">
+      <div class="modal-title modal-title--danger">${icon('alert-triangle', 22)} Deletar "${escHtml(name)}"?</div>
       <button type="button" class="btn btn--icon" onclick="hideModal()">${icon('x', 18)}</button>
     </div>
     <div class="modal-body">
@@ -1912,7 +2722,7 @@ function confirmDeleteHost(index) {
     </div>
     <div class="modal-actions">
       <button type="button" class="btn btn--ghost" onclick="hideModal()">Cancelar</button>
-      <button type="button" class="btn btn--danger" onclick="hideModal(); IPC.deleteHost(${index})">
+      <button type="button" class="btn btn--danger" onclick="hideModal(); IPC.deleteHost(${index != null ? index : 'null'}, '${escAttr(hostId || '')}')">
         ${icon('trash', 16)} Deletar permanentemente
       </button>
     </div>
@@ -1980,16 +2790,28 @@ const Toast = {
 
 //  Context Menu 
 
-function showHostContextMenu(e, index) {
+function showHostContextMenu(e, hostId) {
   e.preventDefault();
   e.stopPropagation();
+  const host = state.hosts.find(h => h.id === hostId || h.name === hostId);
+  const hostName = host ? host.name : '';
+  const isInFolder = host && host.folder_path && host.folder_path.length > 0;
+
   const menu = document.getElementById('context-menu');
   menu.innerHTML = `
-    <button type="button" class="context-menu-item" onclick="closeContextMenu(); navigate('new-host', { editIndex: ${index} })">
+    <button type="button" class="context-menu-item" onclick="closeContextMenu(); navigate('new-host', { hostId: '${escAttr(hostId)}' })">
       ${icon('edit', 16)} Editar host
     </button>
+    <button type="button" class="context-menu-item" onclick="closeContextMenu(); openMoveHostModal('${escAttr(hostId)}', '${escAttr(hostName)}')">
+      ${icon('folder-symlink', 16)} Mover para...
+    </button>
+    ${isInFolder ? `
+      <button type="button" class="context-menu-item" onclick="closeContextMenu(); executeMoveHost('${escAttr(hostId)}', null)">
+        ${icon('undo', 16)} Retirar da pasta (Mover para Raiz)
+      </button>
+    ` : ''}
     <div class="context-menu-separator"></div>
-    <button type="button" class="context-menu-item context-menu-item--danger" onclick="closeContextMenu(); confirmDeleteHost(${index})">
+    <button type="button" class="context-menu-item context-menu-item--danger" onclick="closeContextMenu(); confirmDeleteHost('${escAttr(hostId)}', '${escAttr(hostName)}')">
       ${icon('trash', 16)} Remover host
     </button>
   `;
@@ -2062,72 +2884,304 @@ function bindViewEvents() {
   }
 }
 
+// ─── Drag and Drop & Node Reordering System ──────────────────────────────────
+
+// ─── Drag and Drop & Node Reordering System ──────────────────────────────────
+
 let isDraggingHost = false;
-let draggedHostIndex = null;
+let draggedHostId = null;
+let isDraggingFolder = false;
+let draggedFolderId = null;
+let draggedFolderParentId = null;
 
 function onHostCardClick(e, hostName) {
-  if (isDraggingHost) return;
-  if (e.target.closest('.host-actions') || e.target.closest('.host-drag-handle')) return;
+  if (isDraggingHost || isDraggingFolder) return;
+  if (e.target.closest('.host-actions') || e.target.closest('.host-drag-handle') || e.target.closest('button')) return;
   IPC.openTerminal(hostName);
 }
 
-function calculateReorderTargetIndex(fromIndex, targetCardIndex, dropOnBottomHalf) {
-  let targetIndex = targetCardIndex;
-  if (fromIndex < targetCardIndex) {
-    targetIndex = dropOnBottomHalf ? targetCardIndex : targetCardIndex - 1;
-  } else if (fromIndex > targetCardIndex) {
-    targetIndex = dropOnBottomHalf ? targetCardIndex + 1 : targetCardIndex;
+function onHostDragStart(e, hostId) {
+  if (e.target.closest('.host-actions') || e.target.closest('button')) {
+    e.preventDefault();
+    return;
   }
-  return Math.max(0, Math.min(targetIndex, state.hosts.length - 1));
+  draggedHostId = hostId;
+  isDraggingHost = true;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/rus-host-id', hostId);
+  e.dataTransfer.setData('text/plain', hostId);
+  const card = e.currentTarget;
+  if (card) {
+    card.classList.add('is-dragging');
+  }
+}
+
+function onHostDragEnd(e) {
+  const card = e.currentTarget;
+  if (card) {
+    card.classList.remove('is-dragging');
+  }
+  document.querySelectorAll('.folder-card').forEach(f => f.classList.remove('is-drag-over', 'drag-over-top', 'drag-over-bottom', 'is-dragging'));
+  document.querySelectorAll('.host-item').forEach(el => el.classList.remove('drag-over-top', 'drag-over-bottom', 'is-dragging'));
+  setTimeout(() => {
+    isDraggingHost = false;
+    draggedHostId = null;
+  }, 100);
+}
+
+function onFolderDragStart(e, folderId, parentId) {
+  if (e.target.closest('.folder-actions') || e.target.closest('button')) {
+    e.preventDefault();
+    return;
+  }
+  e.stopPropagation();
+
+  draggedFolderId = folderId;
+  draggedFolderParentId = parentId ? String(parentId) : null;
+  isDraggingFolder = true;
+
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/rus-folder-id', folderId);
+  e.dataTransfer.setData('text/plain', folderId);
+
+  const card = document.querySelector(`.folder-card[data-folder-id="${folderId}"]`);
+  if (card) {
+    card.classList.add('is-dragging');
+  }
+}
+
+function onFolderDragEnd(e) {
+  document.querySelectorAll('.folder-card').forEach(f => {
+    f.classList.remove('is-drag-over', 'drag-over-top', 'drag-over-bottom', 'is-dragging');
+  });
+  document.querySelectorAll('.host-item').forEach(el => {
+    el.classList.remove('drag-over-top', 'drag-over-bottom', 'is-dragging');
+  });
+  setTimeout(() => {
+    isDraggingFolder = false;
+    draggedFolderId = null;
+    draggedFolderParentId = null;
+  }, 100);
+}
+
+function onFolderDragOver(e, folderId) {
+  // Caso 1: Arrastando host para dentro da pasta
+  if (draggedHostId) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    const card = document.querySelector(`.folder-card[data-folder-id="${folderId}"]`);
+    if (card) {
+      card.classList.add('is-drag-over');
+    }
+    return;
+  }
+
+  // Caso 2: Arrastando pasta para reordenar
+  if (draggedFolderId) {
+    if (draggedFolderId === folderId) return;
+
+    const card = document.querySelector(`.folder-card[data-folder-id="${folderId}"]`);
+    if (!card) return;
+
+    // Não permite arrastar para dentro de si mesma ou de seus próprios filhos
+    if (card.closest(`.folder-card[data-folder-id="${draggedFolderId}"]`)) return;
+
+    const targetParentId = card.dataset.parentId ? String(card.dataset.parentId) : null;
+
+    if (targetParentId === draggedFolderParentId) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'move';
+
+      const rect = card.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+
+      if (e.clientY < midY) {
+        card.classList.add('drag-over-top');
+        card.classList.remove('drag-over-bottom');
+      } else {
+        card.classList.add('drag-over-bottom');
+        card.classList.remove('drag-over-top');
+      }
+    }
+  }
+}
+
+function onFolderDragLeave(e, folderId) {
+  e.preventDefault();
+  const card = document.querySelector(`.folder-card[data-folder-id="${folderId}"]`);
+  if (card && !card.contains(e.relatedTarget)) {
+    card.classList.remove('is-drag-over', 'drag-over-top', 'drag-over-bottom');
+  }
+}
+
+function onFolderDrop(e, folderId) {
+  e.preventDefault();
+  e.stopPropagation();
+
+  const card = document.querySelector(`.folder-card[data-folder-id="${folderId}"]`);
+  const dropOnBottomHalf = card ? card.classList.contains('drag-over-bottom') : false;
+
+  if (card) {
+    card.classList.remove('is-drag-over', 'drag-over-top', 'drag-over-bottom');
+  }
+
+  // Caso 1: Soltando host dentro da pasta
+  if (draggedHostId) {
+    const hostId = draggedHostId;
+    draggedHostId = null;
+    isDraggingHost = false;
+
+    IPC.moveHost(hostId, folderId, null);
+    Toast.show('Host movido para a pasta!', 'success');
+    return;
+  }
+
+  // Caso 2: Soltando pasta para reordenar
+  if (draggedFolderId) {
+    if (draggedFolderId === folderId) return;
+    if (!card) return;
+
+    const targetParentId = card.dataset.parentId ? String(card.dataset.parentId) : null;
+    if (targetParentId === draggedFolderParentId) {
+      const fromId = draggedFolderId;
+      draggedFolderId = null;
+      draggedFolderParentId = null;
+      isDraggingFolder = false;
+
+      reorderNodesInContainer(targetParentId, fromId, folderId, dropOnBottomHalf);
+    }
+  }
+}
+
+function onRootDragOver(e) {
+  if (!draggedHostId) return;
+  if (e.target.closest('.folder-card')) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+
+function onRootDrop(e) {
+  if (!draggedHostId) return;
+  if (e.target.closest('.folder-card')) return;
+  e.preventDefault();
+  e.stopPropagation();
+
+  const hostId = draggedHostId;
+  draggedHostId = null;
+  isDraggingHost = false;
+
+  IPC.moveHost(hostId, null, null);
+  Toast.show('Host movido para a raiz!', 'success');
+}
+
+function findHostParentList(nodes, hostId) {
+  if (!nodes || !hostId) return null;
+  for (const n of nodes) {
+    if (n.type === 'host' && (n.data.id === hostId || n.data.name === hostId)) {
+      return { parentId: null, list: nodes };
+    }
+    if (n.type === 'folder' && n.children) {
+      for (const c of n.children) {
+        if (c.type === 'host' && (c.data.id === hostId || c.data.name === hostId)) {
+          return { parentId: n.id, list: n.children };
+        }
+        if (c.type === 'folder' && c.children) {
+          for (const s of c.children) {
+            if (s.type === 'host' && (s.data.id === hostId || s.data.name === hostId)) {
+              return { parentId: c.id, list: c.children };
+            }
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function reorderNodesInContainer(parentId, fromId, toId, dropOnBottomHalf) {
+  let list = null;
+  if (!parentId) {
+    list = [...state.nodes];
+  } else {
+    const parentFolder = findFolderInNodes(state.nodes, parentId);
+    if (!parentFolder || !parentFolder.children) return;
+    list = [...parentFolder.children];
+  }
+
+  const fromIdx = list.findIndex(n => (n.type === 'folder' ? n.id : (n.data.id || n.data.name)) === fromId);
+  const toIdx = list.findIndex(n => (n.type === 'folder' ? n.id : (n.data.id || n.data.name)) === toId);
+
+  if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+
+  const [moved] = list.splice(fromIdx, 1);
+  let insertIdx = toIdx;
+  if (fromIdx < toIdx) {
+    insertIdx = dropOnBottomHalf ? toIdx : toIdx - 1;
+  } else {
+    insertIdx = dropOnBottomHalf ? toIdx + 1 : toIdx;
+  }
+  insertIdx = Math.max(0, Math.min(insertIdx, list.length));
+  list.splice(insertIdx, 0, moved);
+
+  // Atualização otimista no estado local para resposta instantânea
+  if (!parentId) {
+    state.nodes = list;
+  } else {
+    const parentFolder = findFolderInNodes(state.nodes, parentId);
+    if (parentFolder) {
+      parentFolder.children = list;
+    }
+  }
+  renderView();
+
+  // Envia nova ordem de IDs para o backend Rust salvar em config.rtty
+  const orderIds = list.map(n => n.type === 'folder' ? n.id : (n.data.id || n.data.name));
+  IPC.reorderNodes(parentId, orderIds);
+  Toast.show('Ordem atualizada com sucesso!', 'info');
 }
 
 function initHostDragAndDrop() {
   const hostList = document.getElementById('host-list');
   if (!hostList) return;
 
-  // Se há filtro ativo, não ativa drag & drop para evitar corromper a ordem global
+  // Se há busca ativa, não ativa drag & drop para evitar corromper a ordem
   if (state.hostSearchQuery && state.hostSearchQuery.trim()) {
     return;
   }
 
   const items = hostList.querySelectorAll('.host-item');
   items.forEach(item => {
-    item.addEventListener('dragstart', (e) => {
-      if (e.target.closest('.host-actions') || e.target.closest('button')) {
-        e.preventDefault();
-        return;
-      }
-      draggedHostIndex = parseInt(item.dataset.hostIndex, 10);
-      isDraggingHost = true;
-      item.classList.add('is-dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', String(draggedHostIndex));
-    });
-
-    item.addEventListener('dragend', () => {
-      item.classList.remove('is-dragging');
-      document.querySelectorAll('.host-item').forEach(el => {
-        el.classList.remove('drag-over-top', 'drag-over-bottom');
-      });
-      setTimeout(() => { isDraggingHost = false; }, 150);
-    });
-
     item.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
+      const activeDraggedId = draggedHostId || draggedFolderId;
+      if (!activeDraggedId) return;
 
-      const targetIndex = parseInt(item.dataset.hostIndex, 10);
-      if (targetIndex === draggedHostIndex) return;
+      const targetHostId = item.dataset.hostId;
+      if (targetHostId === activeDraggedId) return;
 
-      const rect = item.getBoundingClientRect();
-      const midY = rect.top + rect.height / 2;
+      const targetParentInfo = findHostParentList(state.nodes, targetHostId);
+      if (!targetParentInfo) return;
 
-      if (e.clientY < midY) {
-        item.classList.add('drag-over-top');
-        item.classList.remove('drag-over-bottom');
-      } else {
-        item.classList.add('drag-over-bottom');
-        item.classList.remove('drag-over-top');
+      const draggedParentId = draggedHostId
+        ? (findHostFolderId(state.nodes, draggedHostId) || null)
+        : draggedFolderParentId;
+
+      if (draggedParentId === targetParentInfo.parentId) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+
+        const rect = item.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+
+        if (e.clientY < midY) {
+          item.classList.add('drag-over-top');
+          item.classList.remove('drag-over-bottom');
+        } else {
+          item.classList.add('drag-over-bottom');
+          item.classList.remove('drag-over-top');
+        }
       }
     });
 
@@ -2138,33 +3192,33 @@ function initHostDragAndDrop() {
     });
 
     item.addEventListener('drop', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const fromIndex = draggedHostIndex;
-      const targetIndex = parseInt(item.dataset.hostIndex, 10);
+      const activeDraggedId = draggedHostId || draggedFolderId;
+      const targetHostId = item.dataset.hostId;
+      const dropOnBottomHalf = item.classList.contains('drag-over-bottom');
 
       item.classList.remove('drag-over-top', 'drag-over-bottom');
 
-      if (fromIndex == null || isNaN(fromIndex) || isNaN(targetIndex) || fromIndex === targetIndex) {
-        return;
-      }
+      if (!activeDraggedId || !targetHostId || activeDraggedId === targetHostId) return;
 
-      const rect = item.getBoundingClientRect();
-      const midY = rect.top + rect.height / 2;
-      const dropOnBottomHalf = e.clientY >= midY;
-      const toIndex = calculateReorderTargetIndex(fromIndex, targetIndex, dropOnBottomHalf);
+      const targetParentInfo = findHostParentList(state.nodes, targetHostId);
+      if (!targetParentInfo) return;
 
-      if (fromIndex !== toIndex) {
-        // 1. Reordena localmente no array do estado para feedback imediato
-        const [movedHost] = state.hosts.splice(fromIndex, 1);
-        state.hosts.splice(toIndex, 0, movedHost);
+      const draggedParentId = draggedHostId
+        ? (findHostFolderId(state.nodes, draggedHostId) || null)
+        : draggedFolderParentId;
 
-        // 2. Renderiza a view com a nova ordem
-        renderView();
+      if (draggedParentId === targetParentInfo.parentId) {
+        e.preventDefault();
+        e.stopPropagation();
 
-        // 3. Notifica o backend para salvar no disco imediatamente
-        IPC.reorderHosts(fromIndex, toIndex);
+        const fromId = activeDraggedId;
+        draggedHostId = null;
+        draggedFolderId = null;
+        draggedFolderParentId = null;
+        isDraggingHost = false;
+        isDraggingFolder = false;
+
+        reorderNodesInContainer(targetParentInfo.parentId, fromId, targetHostId, dropOnBottomHalf);
       }
     });
   });
@@ -2293,13 +3347,27 @@ function updateHostListFilteredView() {
     }
   } else {
     if (existingEmpty) existingEmpty.remove();
-    const cardsHtml = filteredHosts.map(h => hostCard(h, state.hosts.indexOf(h), !!query)).join('');
+    const cardsHtml = query
+      ? filteredHosts.map(h => hostCard(h, true, h.folder_path)).join('')
+      : renderNodeTree(state.nodes);
+
     if (hostListEl) {
+      if (!query) {
+        hostListEl.setAttribute('ondragover', 'onRootDragOver(event)');
+        hostListEl.setAttribute('ondrop', 'onRootDrop(event)');
+      } else {
+        hostListEl.removeAttribute('ondragover');
+        hostListEl.removeAttribute('ondrop');
+      }
       hostListEl.innerHTML = cardsHtml;
     } else {
       const listDiv = document.createElement('div');
       listDiv.className = 'host-list';
       listDiv.id = 'host-list';
+      if (!query) {
+        listDiv.setAttribute('ondragover', 'onRootDragOver(event)');
+        listDiv.setAttribute('ondrop', 'onRootDrop(event)');
+      }
       listDiv.innerHTML = cardsHtml;
       containerParent.appendChild(listDiv);
     }
